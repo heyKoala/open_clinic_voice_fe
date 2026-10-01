@@ -1,0 +1,4 @@
+import type { ReactNode } from 'react'
+import { cn } from '../../utils/cn'
+export type BadgeVariant = 'success' | 'info' | 'warning' | 'danger' | 'muted' | 'purple'
+export function Badge({ children, variant = 'muted' }: { children: ReactNode; variant?: BadgeVariant }) { const colors = { success: 'bg-green-50 text-green-700 border-green-200 before:bg-green-600', info: 'bg-blue-50 text-blue-700 border-blue-200 before:bg-blue-600', warning: 'bg-amber-50 text-amber-700 border-amber-200 before:bg-amber-500', danger: 'bg-red-50 text-red-700 border-red-200 before:bg-red-600', muted: 'bg-slate-50 text-slate-600 border-slate-200 before:bg-slate-400', purple: 'bg-violet-50 text-violet-700 border-violet-200 before:bg-violet-600' }; return <span className={cn('inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-medium before:h-1.5 before:w-1.5 before:rounded-full before:content-[\'\']', colors[variant])}>{children}</span> }

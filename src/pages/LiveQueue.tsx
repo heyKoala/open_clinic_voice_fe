@@ -1,0 +1,11 @@
+import { useEffect, useState } from 'react'
+import { Badge } from '../components/ui/Badge'
+import { Card } from '../components/ui/Card'
+import { api } from '../lib/api'
+type Token = { id: number; patient_name: string; doctor_name: string; token_number: number; status: string }
+type Queue = { poll_after_seconds: number; summary: { waiting: number; serving: number; average_wait_seconds: number }; tokens: Token[] }
+export default function LiveQueue() { const [data, setData] = useState<Queue | null>(null); const [error, setError] = useState(false)
+  useEffect(() => { let timer: number; const load = async () => { try { const { data } = await api.get<Queue>('/reports/live-queue/', { params: { _t: Date.now() } }); setData(data); setError(false); timer = window.setTimeout(load, data.poll_after_seconds * 1000) } catch { setError(true); timer = window.setTimeout(load, 10000) } }; void load(); return () => window.clearTimeout(timer) }, [])
+  if (error && !data) return <p className="rounded-lg bg-red-50 p-4 text-sm text-red-700">Live queue unavailable. Retrying…</p>
+  if (!data) return <p className="p-4 text-sm text-slate-500">Loading live queue…</p>
+  return <div className="space-y-6"><div><h1 className="text-2xl font-bold">Live queue</h1><p className="text-sm text-slate-500">Authenticated polling every {data.poll_after_seconds} seconds.</p></div><div className="grid gap-6 lg:grid-cols-3"><Card className="space-y-3 p-4 lg:col-span-2"><div className="flex justify-between border-b border-slate-100 pb-2"><h2 className="text-sm font-bold">Token queue</h2><Badge variant="success">Live</Badge></div>{data.tokens.map(token => <div key={token.id} className={`flex items-center justify-between rounded-lg border p-3.5 ${token.status === 'serving' ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200'}`}><div><p className="font-bold">#{token.token_number} · {token.patient_name}</p><p className="text-xs opacity-70">{token.doctor_name}</p></div><span className="text-xs font-semibold uppercase">{token.status}</span></div>)}</Card><Card className="space-y-4 p-6"><h2 className="font-bold">Operations</h2><p>Waiting: <b>{data.summary.waiting}</b></p><p>Serving: <b>{data.summary.serving}</b></p><p>Average wait: <b>{Math.ceil(data.summary.average_wait_seconds / 60)} min</b></p></Card></div></div> }
