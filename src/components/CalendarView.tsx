@@ -1,15 +1,43 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { Calendar, dateFnsLocalizer, type View, Views, type Event } from 'react-big-calendar'
 import withDragAndDrop from 'react-big-calendar/lib/addons/dragAndDrop'
-import { format, parse, startOfWeek, getDay } from 'date-fns'
+import {
+  format,
+  parse,
+  startOfWeek,
+  endOfWeek,
+  startOfMonth,
+  endOfMonth,
+  startOfDay,
+  endOfDay,
+  addDays,
+  addMonths,
+  getDay,
+  getDaysInMonth,
+  isSameDay,
+  isSameMonth,
+} from 'date-fns'
 import { enIN } from 'date-fns/locale'
 import 'react-big-calendar/lib/css/react-big-calendar.css'
 import 'react-big-calendar/lib/addons/dragAndDrop/styles.css'
 import { useNavigate } from 'react-router-dom'
-import { CheckCircle2 } from 'lucide-react'
+import {
+  ArrowRight,
+  CalendarClock,
+  CalendarDays,
+  ChevronLeft,
+  ChevronRight,
+  CircleCheck,
+  CircleX,
+  Pencil,
+  Plus,
+  RefreshCw,
+  UserCheck,
+  UserX,
+  type LucideIcon,
+} from 'lucide-react'
 import { api } from '../lib/api'
 import { Button } from './ui/Button'
-import { Card } from './ui/Card'
 import { useQueueWebSocket } from '../lib/useWebSocket'
 import { useUIStore } from '../store/uistore'
 import {
@@ -48,6 +76,7 @@ export type AppointmentDto = {
 type DoctorDto = {
   id: number
   full_name: string
+  specialty?: string
 }
 
 const locales = {
@@ -64,63 +93,225 @@ const localizer = dateFnsLocalizer({
 
 const DnDCalendar = (withDragAndDrop as any).default ? (withDragAndDrop as any).default(Calendar) : withDragAndDrop(Calendar)
 
-const statusColorMap: Record<string, string> = {
-  scheduled: '!bg-indigo-50 text-indigo-700 border-transparent border-l-[4px] !border-l-indigo-500',
-  checked_in: '!bg-emerald-50 text-emerald-700 border-transparent border-l-[4px] !border-l-emerald-500',
-  in_progress: '!bg-amber-50 text-amber-700 border-transparent border-l-[4px] !border-l-amber-500',
-  completed: '!bg-emerald-50 text-emerald-700 border-transparent border-l-[4px] !border-l-emerald-500',
-  no_show: '!bg-rose-50 text-rose-700 border-transparent border-l-[4px] !border-l-rose-500',
-  cancelled: '!bg-slate-50 text-slate-700 border-transparent border-l-[4px] !border-l-slate-500',
-  needs_reschedule: '!bg-red-50 text-red-700 border-transparent border-l-[4px] !border-l-red-500 border-dashed'
+// One hue per status: `pill` tints the sidebar filter, `dot` is the marker on each appointment card.
+const STATUS_META: Record<string, { label: string; icon: LucideIcon; pill: string; dot: string }> = {
+  scheduled: { label: 'Scheduled', icon: CalendarClock, pill: 'bg-indigo-100', dot: 'from-indigo-200 to-indigo-400' },
+  checked_in: { label: 'Checked in', icon: UserCheck, pill: 'bg-emerald-100', dot: 'from-emerald-200 to-emerald-400' },
+  in_progress: { label: 'In progress', icon: CalendarClock, pill: 'bg-amber-100', dot: 'from-amber-200 to-amber-400' },
+  completed: { label: 'Completed', icon: CircleCheck, pill: 'bg-teal-100', dot: 'from-teal-200 to-teal-400' },
+  needs_reschedule: { label: 'Needs reschedule', icon: RefreshCw, pill: 'bg-amber-100', dot: 'from-amber-200 to-amber-400' },
+  no_show: { label: 'No show', icon: UserX, pill: 'bg-rose-100', dot: 'from-rose-200 to-rose-400' },
+  cancelled: { label: 'Cancelled', icon: CircleX, pill: 'bg-slate-200/70', dot: 'from-slate-200 to-slate-400' },
 }
+
+const STATUS_FILTERS = ['scheduled', 'checked_in', 'completed', 'needs_reschedule', 'no_show', 'cancelled']
+
+const CALENDAR_VIEWS: View[] = [Views.DAY, Views.WEEK, Views.MONTH, Views.AGENDA]
+
+// Agenda lists this many days from the selected date (react-big-calendar's default length).
+const AGENDA_DAYS = 30
+
+const AVATAR_TINTS = [
+  'bg-indigo-100 text-indigo-700',
+  'bg-emerald-100 text-emerald-700',
+  'bg-amber-100 text-amber-700',
+  'bg-sky-100 text-sky-700',
+  'bg-rose-100 text-rose-700',
+]
 
 type CalendarEvent = Event & {
   resource: AppointmentDto
 }
 
-const CustomToolbar = (toolbar: any) => {
-  const goToBack = () => toolbar.onNavigate('PREV')
-  const goToNext = () => toolbar.onNavigate('NEXT')
-  const goToCurrent = () => toolbar.onNavigate('TODAY')
+/** First and last instant shown on screen for a view. */
+const visibleRange = (date: Date, view: View): [Date, Date] => {
+  if (view === Views.MONTH) return [startOfMonth(date), endOfMonth(date)]
+  if (view === Views.WEEK || view === Views.WORK_WEEK) return [startOfWeek(date), endOfWeek(date)]
+  if (view === Views.AGENDA) return [startOfDay(date), endOfDay(addDays(date, AGENDA_DAYS))]
+  return [startOfDay(date), endOfDay(date)]
+}
 
+const rangeLabel = (date: Date, view: View) => {
+  if (view === Views.MONTH) return format(date, 'MMMM yyyy')
+  if (view === Views.DAY) return format(date, 'EEE, d MMMM yyyy')
+  const [from, to] = visibleRange(date, view)
+  return isSameMonth(from, to)
+    ? `${format(from, 'd')} – ${format(to, 'd MMMM yyyy')}`
+    : `${format(from, 'd MMM')} – ${format(to, 'd MMM yyyy')}`
+}
+
+const timeRange = (appt: AppointmentDto) =>
+  `${format(new Date(appt.starts_at), 'h:mm')} – ${format(new Date(appt.ends_at), 'h:mm a')}`.toLowerCase()
+
+const statusMeta = (status: string) => STATUS_META[status] ?? STATUS_META.scheduled
+
+/** Day/week card. Its layout adapts to the card's height via container queries (see index.css). */
+const AppointmentCard = ({ event }: { event: any }) => {
+  const appt: AppointmentDto = event.resource
+  const subtitle = [appt.reason, event.showDoctor ? appt.doctor_name : null].filter(Boolean).join(' · ')
   return (
-    <div className="flex flex-col gap-3 mb-4">
-      {/* Date above */}
-      <div className="text-center font-semibold text-lg text-slate-800">
-        {toolbar.label}
+    <div className="appt-card" data-status={appt.status} title={`${event.title} · ${timeRange(appt)}`}>
+      <div className="appt-title">{event.title}</div>
+      {subtitle && <div className="appt-sub">{subtitle}</div>}
+      <div className="appt-time">{timeRange(appt)}</div>
+      <span className={`appt-dot bg-linear-to-br ${statusMeta(appt.status).dot}`} />
+    </div>
+  )
+}
+
+const MonthCount = ({ event }: { event: any }) => (
+  <div className="flex items-center justify-center gap-1.5 truncate rounded-full bg-indigo-50 px-2 py-1 text-[11px] font-medium text-indigo-700 transition-colors hover:bg-indigo-100">
+    <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-indigo-400" />
+    <span className="truncate">{event.title}</span>
+  </div>
+)
+
+const AgendaAppointment = ({ event }: { event: any }) => {
+  const appt: AppointmentDto = event.resource
+  const meta = statusMeta(appt.status)
+  return (
+    <div className="flex items-center gap-3">
+      <span className={`h-3 w-3 shrink-0 rounded-full bg-linear-to-br ${meta.dot}`} />
+      <div className="min-w-0 flex-1">
+        <div className="truncate text-sm font-semibold text-slate-900">{event.title}</div>
+        <div className="truncate text-xs text-slate-500">
+          {[appt.reason, appt.doctor_name].filter(Boolean).join(' · ')}
+        </div>
       </div>
+      <span className={`hidden shrink-0 rounded-full px-2.5 py-1 text-[11px] font-medium text-slate-700 sm:inline ${meta.pill}`}>
+        {meta.label}
+      </span>
+    </div>
+  )
+}
 
-      {/* Navigation and View switches on the same line */}
-      <div className="flex items-center justify-between w-full">
-        {/* Navigation */}
-        <div className="flex items-center rounded-md shadow-sm">
-          <button type="button" onClick={goToCurrent} className="relative inline-flex items-center rounded-l-md bg-white px-3 py-1.5 text-xs font-semibold text-slate-900 ring-1 ring-inset ring-slate-300 hover:bg-slate-50 focus:z-10">Today</button>
-          <button type="button" onClick={goToBack} className="relative -ml-px inline-flex items-center bg-white px-3 py-1.5 text-xs font-semibold text-slate-900 ring-1 ring-inset ring-slate-300 hover:bg-slate-50 focus:z-10">Back</button>
-          <button type="button" onClick={goToNext} className="relative -ml-px inline-flex items-center rounded-r-md bg-white px-3 py-1.5 text-xs font-semibold text-slate-900 ring-1 ring-inset ring-slate-300 hover:bg-slate-50 focus:z-10">Next</button>
-        </div>
+const DoctorHeader = ({ resource }: { resource: DoctorDto }) => {
+  const initials = resource.full_name.split(/\s+/).filter(Boolean).slice(0, 2).map(part => part[0]).join('').toUpperCase()
+  return (
+    <div className="flex items-center gap-3 px-1 text-left">
+      <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${AVATAR_TINTS[resource.id % AVATAR_TINTS.length]}`}>
+        {initials}
+      </span>
+      <span className="min-w-0">
+        <span className="block truncate text-sm font-semibold text-slate-900">Dr. {resource.full_name}</span>
+        <span className="block truncate text-xs font-normal text-slate-500">{resource.specialty || 'General Practice'}</span>
+      </span>
+    </div>
+  )
+}
 
-        {/* View Switches */}
-        <div className="flex items-center rounded-md shadow-sm">
-          {Array.isArray(toolbar.views) ? toolbar.views.map((name: string, index: number) => (
-            <button
-              key={name}
-              type="button"
-              onClick={() => toolbar.onView(name)}
-              className={`relative -ml-px inline-flex items-center bg-white px-3 py-1.5 text-xs font-semibold ring-1 ring-inset ring-slate-300 hover:bg-slate-50 focus:z-10 ${toolbar.view === name ? 'bg-slate-100 text-slate-900 z-10' : 'text-slate-600'} ${index === 0 ? 'rounded-l-md ml-0' : ''} ${index === toolbar.views.length - 1 ? 'rounded-r-md' : ''}`}
-            >
-              {name.charAt(0).toUpperCase() + name.slice(1)}
-            </button>
-          )) : Object.keys(toolbar.views).map((name: string, index: number, arr: string[]) => (
-            <button
-              key={name}
-              type="button"
-              onClick={() => toolbar.onView(name)}
-              className={`relative -ml-px inline-flex items-center bg-white px-3 py-1.5 text-xs font-semibold ring-1 ring-inset ring-slate-300 hover:bg-slate-50 focus:z-10 ${toolbar.view === name ? 'bg-slate-100 text-slate-900 z-10' : 'text-slate-600'} ${index === 0 ? 'rounded-l-md ml-0' : ''} ${index === arr.length - 1 ? 'rounded-r-md' : ''}`}
-            >
-              {name.charAt(0).toUpperCase() + name.slice(1)}
-            </button>
-          ))}
+const WeekDayHeader = ({ date }: { date: Date }) => (
+  <span className="flex flex-col items-center gap-1">
+    <span className="text-[11px] font-medium uppercase tracking-wide text-slate-400">{format(date, 'EEE')}</span>
+    <span className={`flex h-8 w-8 items-center justify-center rounded-full text-sm font-semibold ${isSameDay(date, new Date()) ? 'bg-slate-900 text-white' : 'text-slate-800'}`}>
+      {format(date, 'd')}
+    </span>
+  </span>
+)
+
+const CALENDAR_COMPONENTS = {
+  event: AppointmentCard,
+  resourceHeader: DoctorHeader,
+  week: { header: WeekDayHeader },
+  month: { event: MonthCount },
+  agenda: { event: AgendaAppointment },
+}
+
+const CALENDAR_FORMATS = {
+  timeGutterFormat: (date: Date) => format(date, 'h a').toLowerCase(),
+  dateFormat: 'd',
+  agendaDateFormat: (date: Date) => format(date, 'EEE, d MMM'),
+}
+
+const roundIconButton = 'flex h-9 w-9 !min-h-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-50 hover:text-slate-900'
+
+const CalendarToolbar = ({ date, view, onView, onShift, onToday }: {
+  date: Date
+  view: View
+  onView: (view: View) => void
+  onShift: (direction: 1 | -1) => void
+  onToday: () => void
+}) => (
+  <div className="flex shrink-0 flex-wrap items-center justify-between gap-3">
+    <div className="flex items-center gap-2">
+      <button type="button" aria-label="Previous" onClick={() => onShift(-1)} className={roundIconButton}>
+        <ChevronLeft className="h-4 w-4" />
+      </button>
+      <button type="button" aria-label="Next" onClick={() => onShift(1)} className={roundIconButton}>
+        <ChevronRight className="h-4 w-4" />
+      </button>
+      <h3 className="ml-1 text-base font-semibold text-slate-900 md:text-lg">{rangeLabel(date, view)}</h3>
+      {!isSameDay(date, new Date()) && (
+        <button type="button" onClick={onToday} className="ml-1 h-8 !min-h-0 rounded-full bg-slate-100 px-3 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-200">
+          Today
+        </button>
+      )}
+    </div>
+
+    <div className="flex items-center rounded-full border border-slate-200 bg-white p-1">
+      {CALENDAR_VIEWS.map(name => (
+        <button
+          key={name}
+          type="button"
+          aria-pressed={view === name}
+          onClick={() => onView(name)}
+          className={`h-9 !min-h-0 rounded-full px-4 text-sm font-medium capitalize transition-colors ${view === name ? 'bg-slate-900 text-white' : 'text-slate-600 hover:text-slate-900'}`}
+        >
+          {name}
+        </button>
+      ))}
+    </div>
+  </div>
+)
+
+const MiniMonth = ({ selected, onSelect }: { selected: Date; onSelect: (date: Date) => void }) => {
+  const [month, setMonth] = useState(() => startOfMonth(selected))
+
+  useEffect(() => {
+    setMonth(startOfMonth(selected))
+  }, [selected])
+
+  const today = new Date()
+  return (
+    <div>
+      <div className="mb-3 flex items-center justify-between">
+        <span className="text-sm font-semibold text-slate-900">{format(month, 'MMMM yyyy')}</span>
+        <div className="flex gap-1">
+          <button type="button" aria-label="Previous month" onClick={() => setMonth(addMonths(month, -1))} className="flex h-7 w-7 !min-h-0 items-center justify-center rounded-full text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-900">
+            <ChevronLeft className="h-4 w-4" />
+          </button>
+          <button type="button" aria-label="Next month" onClick={() => setMonth(addMonths(month, 1))} className="flex h-7 w-7 !min-h-0 items-center justify-center rounded-full text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-900">
+            <ChevronRight className="h-4 w-4" />
+          </button>
         </div>
+      </div>
+      <div className="grid grid-cols-7 gap-y-1 text-center">
+        {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((name, i) => (
+          <span key={i} className="pb-1 text-[11px] font-medium text-slate-400">{name}</span>
+        ))}
+        {Array.from({ length: getDay(month) }).map((_, i) => <span key={`blank-${i}`} />)}
+        {Array.from({ length: getDaysInMonth(month) }).map((_, i) => {
+          const day = new Date(month.getFullYear(), month.getMonth(), i + 1)
+          const isSelected = isSameDay(day, selected)
+          const isToday = isSameDay(day, today)
+          return (
+            <button
+              key={i}
+              type="button"
+              aria-pressed={isSelected}
+              onClick={() => onSelect(day)}
+              className={`mx-auto flex h-8 w-8 !min-h-0 items-center justify-center rounded-full text-xs transition-colors ${
+                isSelected
+                  ? 'bg-slate-900 font-semibold text-white'
+                  : isToday
+                    ? 'font-semibold text-slate-900 ring-1 ring-inset ring-slate-300 hover:bg-slate-100'
+                    : 'text-slate-700 hover:bg-slate-100'
+              }`}
+            >
+              {i + 1}
+            </button>
+          )
+        })}
       </div>
     </div>
   )
@@ -298,6 +489,24 @@ export function CalendarView({
   const [editEvent, setEditEvent] = useState<CalendarEvent | null>(null)
   const [editForm, setEditForm] = useState({ status: 'scheduled' })
   const [submittingEdit, setSubmittingEdit] = useState(false)
+  const [patientToEdit, setPatientToEdit] = useState<any>(null)
+  const [showPatientEditor, setShowPatientEditor] = useState(false)
+  const [loadingPatient, setLoadingPatient] = useState(false)
+
+  const handleEditPatient = async (patientId: number) => {
+    setLoadingPatient(true)
+    try {
+      const res = await api.get(`/patients/${patientId}/`)
+      setShowEditModal(false)
+      setPatientToEdit(res.data)
+      setShowPatientEditor(true)
+    } catch (err) {
+      console.error('Failed to load patient', err)
+      setErrorAlert('Could not load this patient\'s details.')
+    } finally {
+      setLoadingPatient(false)
+    }
+  }
 
   useEffect(() => {
     if (!isDoctor) {
@@ -311,25 +520,10 @@ export function CalendarView({
   const fetchAppointments = useCallback(async (currentDate: Date, currentView: View) => {
     setLoading(true)
     try {
-      let start = new Date(currentDate)
-      let end = new Date(currentDate)
-
-      if (currentView === Views.MONTH || currentView === Views.AGENDA) {
-        start = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1)
-        end = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0, 23, 59, 59)
-      } else if (currentView === Views.WEEK || currentView === Views.WORK_WEEK) {
-        start.setDate(currentDate.getDate() - currentDate.getDay())
-        start.setHours(0, 0, 0, 0)
-        end = new Date(start)
-        end.setDate(start.getDate() + 7)
-        end.setHours(23, 59, 59, 999)
-      } else {
-        start.setHours(0, 0, 0, 0)
-        end.setHours(23, 59, 59, 999)
-      }
-
-      start.setDate(start.getDate() - 7)
-      end.setDate(end.getDate() + 7)
+      // Pad a week either side so neighbouring days are ready when navigating.
+      const [from, to] = visibleRange(currentDate, currentView)
+      const start = addDays(from, -7)
+      const end = addDays(to, 7)
 
       const params: any = {
         starts_at_after: start.toISOString(),
@@ -467,7 +661,32 @@ export function CalendarView({
     }
   }
 
-  const rawEvents: CalendarEvent[] = useMemo(() => appointments.map(appt => {
+  const [hiddenStatuses, setHiddenStatuses] = useState<Set<string>>(new Set())
+
+  const toggleStatus = (status: string) => {
+    setHiddenStatuses(prev => {
+      const next = new Set(prev)
+      if (next.has(status)) next.delete(status)
+      else next.add(status)
+      return next
+    })
+  }
+
+  // Appointments per status within the range currently on screen.
+  const statusCounts = useMemo(() => {
+    const [from, to] = visibleRange(date, view)
+    const counts: Record<string, number> = {}
+    for (const appt of appointments) {
+      const startsAt = new Date(appt.starts_at)
+      if (startsAt >= from && startsAt <= to) counts[appt.status] = (counts[appt.status] ?? 0) + 1
+    }
+    return counts
+  }, [appointments, date, view])
+
+  // Week view mixes every doctor into one column per day, so cards name the doctor there.
+  const showDoctorOnCards = !isDoctor && selectedDoctorId === 'all' && view !== Views.DAY
+
+  const rawEvents: CalendarEvent[] = useMemo(() => appointments.filter(appt => !hiddenStatuses.has(appt.status)).map(appt => {
     const start = new Date(appt.starts_at)
     let end = new Date(appt.ends_at)
 
@@ -481,9 +700,10 @@ export function CalendarView({
       start,
       end,
       resource: appt,
-      resourceId: appt.doctor
+      resourceId: appt.doctor,
+      showDoctor: showDoctorOnCards
     }
-  }), [appointments])
+  }), [appointments, hiddenStatuses, showDoctorOnCards])
 
   const events: CalendarEvent[] = useMemo(() => {
     if (view !== Views.MONTH) {
@@ -560,236 +780,189 @@ export function CalendarView({
     }
   }
 
-  const eventPropGetter = useCallback((event: CalendarEvent) => {
-    if (event.resource?.isAggregate) {
-      return {
-        className: 'border border-blue-500/20 bg-blue-600/90 backdrop-blur text-white shadow-sm rounded-md px-1 py-1 text-center font-semibold text-xs',
-      }
-    }
-    const status = event.resource?.status
-    const colorClass = statusColorMap[status] || '!bg-slate-50 text-slate-800 border-transparent border-l-[4px] !border-l-slate-400'
-    return {
-      className: `rounded-r-xl rounded-l-sm px-2 py-1.5 text-xs font-medium transition-all hover:brightness-95 overflow-hidden shadow-sm ${colorClass}`,
-      style: { border: 'none', color: 'inherit' }
-    }
-  }, [])
+  const eventPropGetter = useCallback((event: CalendarEvent) => ({
+    className: event.resource?.isAggregate ? 'appt-count' : 'appt-event',
+  }), [])
 
-  const EventComponent = ({ event }: { event: any }) => {
-    if (event.resource?.isAggregate) {
-      return (
-        <div className="h-full w-full flex items-center justify-center font-medium text-slate-700 p-1 text-[11px] rounded-md transition-colors">
-          {event.title}
-        </div>
-      )
-    }
-    return (
-      <div className="h-full overflow-hidden p-1 text-[11px] leading-tight">
-        <div className="font-semibold">{event.title}</div>
-        <div className="truncate opacity-90">{event.resource.reason}</div>
-        <div className="font-medium opacity-75 mt-0.5">{event.resource.doctor_name}</div>
-      </div>
+  const shiftDate = (direction: 1 | -1) => {
+    setDate(current =>
+      view === Views.MONTH
+        ? addMonths(current, direction)
+        : addDays(current, direction * (view === Views.WEEK ? 7 : view === Views.AGENDA ? AGENDA_DAYS : 1))
     )
   }
 
-  const [categories] = useState({
-    'Consultation': true,
-    'Follow-up': true,
-    'Routine Checkup': true,
-    'Emergency': false
-  })
-  
-  const [priorityFilter] = useState('All')
-
-  const calendarHeight = fillHeight ? 'h-full min-h-0' : heightClass
+  const showDoctorColumns = !isDoctor && selectedDoctorId === 'all' && view === Views.DAY && doctors.length > 0
+  const panel = 'rounded-3xl border border-slate-200/70 bg-white'
 
   return (
-    <div className={fillHeight ? 'flex h-full min-h-0 flex-col gap-6' : 'space-y-6'}>
-      {!hideHeader && (
-        <div className="flex shrink-0 flex-col md:flex-row items-center justify-between gap-4">
-          <div>
-            <h2 className="text-xl font-semibold tracking-tight text-slate-900">
-              {customTitle || "Calendar"}
-            </h2>
-            <p className="text-xs text-slate-500">{customSubtitle || "Manage your schedule"}</p>
-          </div>
-          <div className="flex items-center gap-3">
-            {!isDoctor && !hideDoctorSelect && (
-              <select
-                value={selectedDoctorId}
-                onChange={e => setSelectedDoctorId(e.target.value)}
-                className="rounded-xl border border-slate-300 px-3 py-2 text-sm bg-white min-w-[150px]"
-              >
-                <option value="all">All Doctors</option>
-                {doctors.map(d => (
-                  <option key={d.id} value={d.id}>Dr. {d.full_name}</option>
-                ))}
-              </select>
-            )}
-            {!isDoctor && (
-              <Button variant="secondary" onClick={() => void handleOpenWalkinModal(new Date())}>
-                + Walk-in
-              </Button>
-            )}
-            {!isDoctor && showBookButton && (
-              <Button variant="default" onClick={() => navigate(`/app/booking?date=${format(date, 'yyyy-MM-dd')}`)}>
-                Book Appointment
-              </Button>
-            )}
-          </div>
-        </div>
-      )}
-
-      <div className={`flex flex-col lg:flex-row gap-6 ${fillHeight ? 'flex-1 min-h-0' : ''}`}>
-        {/* Left Sidebar (Mini Calendar & Filters) */}
+    <div className={fillHeight ? 'flex h-full min-h-0 flex-col' : ''}>
+      <div className={`flex flex-col gap-5 lg:flex-row ${fillHeight ? 'min-h-0 flex-1' : ''}`}>
+        {/* Left panel: date picker and status filters */}
         {!hideSidebar && (
-        <div className={`lg:w-64 flex-shrink-0 space-y-6 hidden lg:block ${fillHeight ? 'overflow-y-auto' : ''}`}>
-          {!hideMiniCalendar && (
-          <Card className="p-5 bg-white border-none shadow-[0_2px_10px_-4px_rgba(0,0,0,0.05)] rounded-2xl">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-semibold text-slate-900 text-sm">
-                {date.toLocaleString('default', { month: 'long', year: 'numeric' })}
-              </h3>
-              <div className="flex gap-1 text-slate-400">
-                <button onClick={() => setDate(new Date(date.getFullYear(), date.getMonth() - 1, 1))} className="hover:text-slate-900">&lt;</button>
-                <button onClick={() => setDate(new Date(date.getFullYear(), date.getMonth() + 1, 1))} className="hover:text-slate-900">&gt;</button>
+          <aside className={`${panel} hidden w-72 shrink-0 flex-col p-5 lg:flex ${fillHeight ? 'overflow-y-auto' : ''}`}>
+            <h2 className="text-lg font-semibold tracking-tight text-slate-900">Calendar</h2>
+            <p className="mt-1 text-sm text-slate-500">Pick a date and choose which appointments to show.</p>
+
+            {!hideMiniCalendar && (
+              <div className="mt-5">
+                <MiniMonth selected={date} onSelect={setDate} />
               </div>
-            </div>
-            
-            <div className="grid grid-cols-7 text-center text-[10px] font-medium text-slate-400 mb-2">
-              <div>Mo</div><div>Tu</div><div>We</div><div>Th</div><div>Fr</div><div>Sa</div><div>Su</div>
-            </div>
-            <div className="grid grid-cols-7 text-center text-xs text-slate-700 gap-y-2">
-              {Array.from({ length: new Date(date.getFullYear(), date.getMonth(), 1).getDay() === 0 ? 6 : new Date(date.getFullYear(), date.getMonth(), 1).getDay() - 1 }).map((_, i) => (
-                <div key={`empty-${i}`}></div>
-              ))}
-              {Array.from({ length: new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate() }).map((_, i) => {
-                const day = i + 1;
-                const isSelected = date.getDate() === day;
+            )}
+
+            <div className="mt-6 space-y-2">
+              {STATUS_FILTERS.map(status => {
+                const meta = STATUS_META[status]
+                const Icon = meta.icon
+                const isHidden = hiddenStatuses.has(status)
                 return (
-                  <div key={day} className="flex justify-center">
-                    <button 
-                      onClick={() => setDate(new Date(date.getFullYear(), date.getMonth(), day))}
-                      className={`w-6 h-6 flex items-center justify-center rounded-full ${isSelected ? 'bg-indigo-500 text-white font-bold shadow-sm' : 'hover:bg-slate-100'}`}
-                    >
-                      {day}
-                    </button>
-                  </div>
+                  <button
+                    key={status}
+                    type="button"
+                    aria-pressed={!isHidden}
+                    onClick={() => toggleStatus(status)}
+                    className={`flex w-full items-center gap-3 rounded-full py-1.5 pl-1.5 pr-4 text-left text-sm font-medium transition ${isHidden ? 'bg-slate-50 text-slate-400' : `${meta.pill} text-slate-800 hover:brightness-95`}`}
+                  >
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/70">
+                      <Icon className="h-4 w-4" />
+                    </span>
+                    <span className={`flex-1 truncate ${isHidden ? 'line-through' : ''}`}>{meta.label}</span>
+                    <span className="text-xs tabular-nums opacity-70">{statusCounts[status] ?? 0}</span>
+                  </button>
                 )
               })}
             </div>
-          </Card>
+
+            <div className="mt-auto pt-6">
+              <Button variant="default" className="h-11 w-full rounded-full" onClick={jumpToNextAppointment}>
+                Next appointment
+                <ArrowRight />
+              </Button>
+            </div>
+          </aside>
+        )}
+
+        {/* Main panel. Embedded uses (hideSidebar) already sit inside a card, so skip the chrome. */}
+        <section className={`flex min-w-0 flex-1 flex-col ${hideSidebar ? '' : `${panel} p-4 md:p-5`}`}>
+          {!hideHeader && (
+            <div className="mb-4 flex shrink-0 flex-wrap items-start justify-between gap-3">
+              <div className="min-w-0">
+                <h2 className="text-xl font-semibold tracking-tight text-slate-900">
+                  {customTitle || 'Appointments'}
+                </h2>
+                <p className="mt-0.5 text-sm text-slate-500">{customSubtitle || 'Stay organized and on track with your schedule'}</p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                {!isDoctor && !hideDoctorSelect && (
+                  <select
+                    aria-label="Doctor"
+                    value={selectedDoctorId}
+                    onChange={e => setSelectedDoctorId(e.target.value)}
+                    className="h-11 min-w-[150px] rounded-full border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700"
+                  >
+                    <option value="all">All Doctors</option>
+                    {doctors.map(d => (
+                      <option key={d.id} value={d.id}>Dr. {d.full_name}</option>
+                    ))}
+                  </select>
+                )}
+                {!isDoctor && (
+                  <Button
+                    variant={showBookButton ? 'outline' : 'default'}
+                    className="h-11 rounded-full px-5"
+                    onClick={() => void handleOpenWalkinModal(new Date())}
+                  >
+                    <Plus />
+                    Walk-in
+                  </Button>
+                )}
+                {!isDoctor && showBookButton && (
+                  <Button variant="default" className="h-11 rounded-full px-5" onClick={() => navigate(`/app/booking?date=${format(date, 'yyyy-MM-dd')}`)}>
+                    Book Appointment
+                  </Button>
+                )}
+              </div>
+            </div>
           )}
 
-          {/* Categories */}
-          <Card className="p-5 bg-white border-none shadow-[0_2px_10px_-4px_rgba(0,0,0,0.05)] rounded-2xl">
-            <h3 className="font-semibold text-slate-900 text-sm mb-4">Categories</h3>
-            <div className="space-y-3">
-              {Object.entries(categories).map(([cat, isChecked], idx) => {
-                const colors = ['bg-emerald-500', 'bg-indigo-500', 'bg-purple-500', 'bg-rose-500'];
-                const color = colors[idx % colors.length];
-                return (
-                  <label key={cat} className="flex items-center justify-between cursor-pointer group">
-                    <div className="flex items-center gap-3">
-                      <div className={`w-4 h-4 rounded-[4px] flex items-center justify-center transition-colors ${isChecked ? color : 'bg-slate-200 group-hover:bg-slate-300'}`}>
-                        {isChecked && <CheckCircle2 className="w-3 h-3 text-white" />}
-                      </div>
-                      <span className={`text-xs font-medium ${isChecked ? 'text-slate-800' : 'text-slate-500'}`}>{cat}</span>
-                    </div>
-                  </label>
-                )
-              })}
-            </div>
-          </Card>
+          <CalendarToolbar date={date} view={view} onView={setView} onShift={shiftDate} onToday={() => setDate(new Date())} />
 
-          {/* Prioritize */}
-          <Card className="p-5 bg-white border-none shadow-[0_2px_10px_-4px_rgba(0,0,0,0.05)] rounded-2xl">
-            <h3 className="font-semibold text-slate-900 text-sm mb-4">Prioritize</h3>
-            <div className="space-y-3">
-              {['All', 'Urgent', 'Routine'].map((p) => (
-                <label key={p} className="flex items-center justify-between cursor-pointer group">
-                  <div className="flex items-center gap-3">
-                    <div className={`w-3.5 h-3.5 rounded-full border-[3.5px] transition-colors ${priorityFilter === p ? 'border-indigo-500 bg-white' : 'border-slate-200 bg-transparent group-hover:border-slate-300'}`} />
-                    <span className={`text-xs font-medium ${priorityFilter === p ? 'text-slate-800' : 'text-slate-500'}`}>{p}</span>
-                  </div>
-                </label>
-              ))}
-            </div>
-          </Card>
-        </div>
-        )}
-
-        {/* Main Calendar */}
-        <div className={`flex-1 bg-white rounded-2xl shadow-[0_2px_10px_-4px_rgba(0,0,0,0.05)] overflow-hidden ${calendarHeight} relative ${fillHeight ? '' : 'min-h-[500px]'}`}>
-        {loading && <div className="absolute inset-0 z-10 bg-white/50 backdrop-blur-sm flex items-center justify-center"><div className="w-6 h-6 border-2 border-slate-900 border-t-transparent rounded-full animate-spin" /></div>}
-        
-        {/* EMPTY STATE */}
-        {events.length === 0 && !loading && view === Views.DAY && (
-          <div className="absolute inset-0 z-[5] flex flex-col items-center justify-center bg-white/90 backdrop-blur-sm rounded-xl">
-            <div className="text-center p-8 max-w-md">
-              <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <svg className="w-8 h-8 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                </svg>
+          <div className={`relative mt-4 ${fillHeight ? 'min-h-0 flex-1' : `${heightClass} min-h-[500px]`}`}>
+            {loading && (
+              <div className="absolute inset-0 z-40 flex items-center justify-center rounded-2xl bg-white/60">
+                <div className="h-6 w-6 animate-spin rounded-full border-2 border-slate-900 border-t-transparent" />
               </div>
-              <h3 className="text-lg font-semibold text-slate-900 mb-2">No appointments scheduled</h3>
-              <p className="text-sm text-slate-500 mb-6">There are no bookings for the selected date.</p>
-              <Button onClick={jumpToNextAppointment} className="bg-slate-900 text-white hover:bg-slate-800">
-                Jump to next appointment
-              </Button>
+            )}
+
+            {/* Empty day: floats over the grid without blocking slot clicks around it. */}
+            {events.length === 0 && !loading && view === Views.DAY && (
+              <div className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center p-4">
+                <div className="pointer-events-auto max-w-xs rounded-3xl border border-slate-200/70 bg-white/95 p-6 text-center shadow-[0_16px_40px_-20px_rgba(15,23,42,0.25)]">
+                  <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 text-slate-500">
+                    <CalendarDays className="h-5 w-5" />
+                  </div>
+                  <h3 className="text-base font-semibold text-slate-900">No appointments scheduled</h3>
+                  <p className="mt-1 text-sm text-slate-500">There are no bookings to show for this date.</p>
+                  <Button variant="default" className="mt-4 h-10 rounded-full px-4" onClick={jumpToNextAppointment}>
+                    Jump to next appointment
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            <div className={`rbc-custom-theme absolute inset-0 ${fillHeight ? 'rbc-roomy' : ''}`}>
+              <DnDCalendar
+                key={`calendar-${doctors.length}-${selectedDoctorId}`}
+                localizer={localizer}
+                events={events}
+                resources={showDoctorColumns ? doctors : undefined}
+                resourceIdAccessor="id"
+                resourceTitleAccessor={(r: any) => `Dr. ${r.full_name}`}
+                onEventDrop={!isDoctor ? onEventDrop : undefined}
+                onEventResize={!isDoctor ? onEventResize : undefined}
+                draggableAccessor={(event: CalendarEvent) => !event.resource?.isAggregate}
+                resizable={!isDoctor}
+                selectable={!isDoctor}
+                dayLayoutAlgorithm={'no-overlap'}
+                onSelectSlot={(slotInfo: any) => {
+                  if (!isDoctor && (slotInfo.action === 'click' || slotInfo.action === 'select')) {
+                    void handleOpenWalkinModal(slotInfo.start)
+                  }
+                }}
+                onSelectEvent={(event: CalendarEvent) => {
+                  if (view === Views.MONTH && event.resource?.isAggregate) {
+                    setDate(event.resource.date)
+                    setView(Views.DAY)
+                  } else if (view !== Views.MONTH && !event.resource?.isAggregate) {
+                    setEditEvent(event)
+                    setEditForm({ status: event.resource.status })
+                    setShowEditModal(true)
+                  }
+                }}
+                view={view}
+                onView={setView}
+                views={CALENDAR_VIEWS}
+                date={date}
+                onNavigate={setDate}
+                defaultView={defaultView}
+                step={15}
+                timeslots={4}
+                length={AGENDA_DAYS}
+                min={new Date(0, 0, 0, 7, 0, 0)}
+                max={new Date(0, 0, 0, 21, 0, 0)}
+                toolbar={false}
+                components={CALENDAR_COMPONENTS}
+                formats={CALENDAR_FORMATS}
+                eventPropGetter={eventPropGetter}
+                dayPropGetter={dayPropGetter}
+                onDrillDown={(date: Date) => {
+                  setDate(date)
+                  setView(Views.DAY)
+                }}
+              />
             </div>
           </div>
-        )}
-
-        <div className={`${fillHeight ? 'h-full' : heightClass} rbc-custom-theme ${fillHeight ? 'rbc-roomy' : ''}`}>
-          <DnDCalendar
-            key={`calendar-${doctors.length}-${selectedDoctorId}`}
-            localizer={localizer}
-            events={events}
-            resources={!isDoctor && selectedDoctorId === 'all' && view === Views.DAY && doctors.length > 0 ? doctors : undefined}
-            resourceIdAccessor="id"
-            resourceTitleAccessor={(r: any) => `Dr. ${r.full_name}`}
-            onEventDrop={!isDoctor ? onEventDrop : undefined}
-            onEventResize={!isDoctor ? onEventResize : undefined}
-            resizable={!isDoctor}
-            selectable={!isDoctor}
-            dayLayoutAlgorithm={'no-overlap'}
-            onSelectSlot={(slotInfo: any) => {
-              if (!isDoctor && (slotInfo.action === 'click' || slotInfo.action === 'select')) {
-                void handleOpenWalkinModal(slotInfo.start)
-              }
-            }}
-            onSelectEvent={(event: CalendarEvent) => {
-              if (view === Views.MONTH && event.resource?.isAggregate) {
-                setDate(event.resource.date)
-                setView(Views.DAY)
-              } else if (view !== Views.MONTH && !event.resource?.isAggregate) {
-                setEditEvent(event)
-                setEditForm({ status: event.resource.status })
-                setShowEditModal(true)
-              }
-            }}
-            view={view}
-            onView={setView}
-            date={date}
-            onNavigate={setDate}
-            defaultView={defaultView}
-            step={15}
-            timeslots={4}
-            min={new Date(0, 0, 0, 7, 0, 0)}
-            max={new Date(0, 0, 0, 21, 0, 0)}
-            components={{
-              event: EventComponent,
-              toolbar: CustomToolbar
-            }}
-            eventPropGetter={eventPropGetter}
-            dayPropGetter={dayPropGetter}
-            onDrillDown={(date: Date) => {
-              setDate(date)
-              setView(Views.DAY)
-            }}
-          />
-        </div>
-        </div>
+        </section>
       </div>
 
       <AlertDialog open={!!confirmAction} onOpenChange={(open) => { if (!open) setConfirmAction(null) }}>
@@ -954,9 +1127,23 @@ export function CalendarView({
             <DialogTitle>Update Appointment</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 pt-2">
-            <div>
-              <p className="text-sm font-medium text-slate-900">{editEvent?.title}</p>
-              <p className="text-xs text-slate-500">{editEvent?.resource?.reason}</p>
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="truncate text-sm font-medium text-slate-900">{editEvent?.title}</p>
+                <p className="truncate text-xs text-slate-500">{editEvent?.resource?.reason}</p>
+              </div>
+              {!isDoctor && editEvent && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="shrink-0"
+                  disabled={loadingPatient}
+                  onClick={() => void handleEditPatient(editEvent.resource.patient)}
+                >
+                  <Pencil />
+                  {loadingPatient ? 'Loading...' : 'Edit patient'}
+                </Button>
+              )}
             </div>
             <div>
               <label className="block text-xs font-medium text-slate-700 mb-1">Status</label>
@@ -995,6 +1182,16 @@ export function CalendarView({
           </div>
         </DialogContent>
       </Dialog>
+
+      <PatientFormDialog
+        isOpen={showPatientEditor}
+        onOpenChange={setShowPatientEditor}
+        patient={patientToEdit}
+        onSuccess={() => {
+          // The patient's name is shown on every card, so reload them.
+          void fetchAppointments(date, view)
+        }}
+      />
 
       <PatientFormDialog 
         isOpen={showNewPatientModal} 

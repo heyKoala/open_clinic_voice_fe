@@ -3,7 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../shadcn/dial
 import { Input } from '../shadcn/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../shadcn/select'
 import { Button } from '../shadcn/button'
-import { PhoneInput } from '../ui/PhoneInput'
+import { PhoneInput, COUNTRY_CODES } from '../ui/PhoneInput'
 import { api } from '../../lib/api'
 import { useUIStore } from '../../store/uistore'
 
@@ -11,11 +11,22 @@ interface PatientFormDialogProps {
   isOpen: boolean
   onOpenChange: (open: boolean) => void
   onSuccess: (patientId: number) => void
+  /** Pass an existing patient to edit it; omit to create a new one. */
   patient?: any
+}
+
+// Longest codes first so "+971" isn't mistaken for "+97…" or "+9".
+const DIAL_CODES = COUNTRY_CODES.map(c => c.code).sort((a, b) => b.length - a.length)
+
+const splitPhone = (phone: string) => {
+  const dialCode = DIAL_CODES.find(code => phone.startsWith(code))
+  return dialCode ? { dialCode, number: phone.slice(dialCode.length) } : { dialCode: '+91', number: phone }
 }
 
 export function PatientFormDialog({ isOpen, onOpenChange, onSuccess, patient }: PatientFormDialogProps) {
   const { addToast } = useUIStore()
+  const isEditing = !!patient
+  const [saving, setSaving] = useState(false)
   const [phoneDialCode, setPhoneDialCode] = useState('+91')
   const [patientError, setPatientError] = useState('')
   const [newPatientDraft, setNewPatientDraft] = useState({
@@ -35,9 +46,12 @@ export function PatientFormDialog({ isOpen, onOpenChange, onSuccess, patient }: 
   
   React.useEffect(() => {
     if (patient && isOpen) {
+      const phone = splitPhone(patient.phone || '')
+      setPatientError('')
+      setPhoneDialCode(phone.dialCode)
       setNewPatientDraft({
         full_name: patient.full_name || '',
-        phone_number: patient.phone ? patient.phone.replace('+91', '') : '',
+        phone_number: phone.number,
         preferred_language: patient.preferred_language || 'English',
         date_of_birth: patient.date_of_birth || '',
         gender: patient.gender || 'unspecified',
@@ -46,9 +60,6 @@ export function PatientFormDialog({ isOpen, onOpenChange, onSuccess, patient }: 
         emergency_contact_phone: patient.emergency_contact_phone || '',
         allergies: '', medications: '', illnesses: '', surgeries: ''
       })
-      if (patient.phone && patient.phone.startsWith('+91')) {
-        setPhoneDialCode('+91')
-      }
     }
   }, [patient, isOpen])
 
@@ -60,6 +71,7 @@ export function PatientFormDialog({ isOpen, onOpenChange, onSuccess, patient }: 
       return
     }
 
+    setSaving(true)
     try {
       const fullPhone = `${phoneDialCode}${newPatientDraft.phone_number}`
       const payload = {
@@ -73,7 +85,7 @@ export function PatientFormDialog({ isOpen, onOpenChange, onSuccess, patient }: 
         emergency_contact_phone: newPatientDraft.emergency_contact_phone
       }
 
-      const res = patient ? await api.put(`/patients/${patient.id}/`, payload) : await api.post('/patients/', payload)
+      const res = patient ? await api.patch(`/patients/${patient.id}/`, payload) : await api.post('/patients/', payload)
       const patientId = res.data.id
 
       // Save structured health records if filled
@@ -95,7 +107,7 @@ export function PatientFormDialog({ isOpen, onOpenChange, onSuccess, patient }: 
         await Promise.all(records)
       }
 
-      addToast('Patient and clinical intake saved successfully', 'success')
+      addToast(isEditing ? 'Patient details updated' : 'Patient and clinical intake saved successfully', 'success')
       
       onOpenChange(false)
       setNewPatientDraft({ 
@@ -108,7 +120,14 @@ export function PatientFormDialog({ isOpen, onOpenChange, onSuccess, patient }: 
 
     } catch (err: any) {
       console.error(err)
-      setPatientError(err.response?.data?.error || 'Failed to create patient.')
+      // DRF reports validation problems per field, e.g. { phone: ["..."] }.
+      const data = err.response?.data
+      const fieldError = data && typeof data === 'object' ? Object.values(data).flat()[0] : null
+      setPatientError(
+        data?.error || (typeof fieldError === 'string' ? fieldError : `Failed to ${isEditing ? 'update' : 'create'} patient.`)
+      )
+    } finally {
+      setSaving(false)
     }
   }
 
@@ -116,7 +135,7 @@ export function PatientFormDialog({ isOpen, onOpenChange, onSuccess, patient }: 
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[800px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Add new patient</DialogTitle>
+          <DialogTitle>{isEditing ? 'Edit patient' : 'Add new patient'}</DialogTitle>
         </DialogHeader>
         <form className="space-y-6 mt-2" onSubmit={createPatient}>
           
@@ -205,7 +224,11 @@ export function PatientFormDialog({ isOpen, onOpenChange, onSuccess, patient }: 
           {/* Section 3: Clinical Intake */}
           <div>
             <h3 className="text-md font-semibold text-slate-900 border-b pb-2 mb-4">Clinical Intake</h3>
-            <p className="text-xs text-slate-500 mb-4">Reason for visit will be captured when booking an appointment.</p>
+            <p className="text-xs text-slate-500 mb-4">
+              {isEditing
+                ? "Anything entered here is added to the patient's existing clinical records."
+                : 'Reason for visit will be captured when booking an appointment.'}
+            </p>
             <div className="grid grid-cols-1 gap-4">
               <div className="space-y-2">
                 <label className="text-sm font-medium text-slate-700">Allergies (Foods, Drugs, etc.)</label>
@@ -229,8 +252,8 @@ export function PatientFormDialog({ isOpen, onOpenChange, onSuccess, patient }: 
           {patientError && <p className="text-sm text-red-600 font-medium">{patientError}</p>}
           
           <div className="pt-4 pb-2 sticky bottom-0 bg-white border-t mt-6">
-            <Button variant="default" type="submit" className="w-full justify-center bg-slate-900 text-white shadow-sm hover:bg-slate-800">
-              Create patient
+            <Button variant="default" type="submit" disabled={saving} className="w-full justify-center bg-slate-900 text-white shadow-sm hover:bg-slate-800">
+              {saving ? 'Saving...' : isEditing ? 'Save changes' : 'Create patient'}
             </Button>
           </div>
         </form>
