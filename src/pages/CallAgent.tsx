@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Room, RoomEvent } from "livekit-client";
 import { Mic, MicOff, Phone, PhoneOff } from "lucide-react";
+import { api } from "../lib/api";
 
 export default function CallAgent() {
   const url = "wss://vx.heykoala.ai";
@@ -13,37 +14,25 @@ export default function CallAgent() {
   const [errorMsg, setErrorMsg] = useState("");
 
   const joinCall = async (participantName: string, participantIdentity: string) => {
-    const agentUrl = import.meta.env.VITE_AGENT_URL || "https://worker.heykoala.ai";
-    const apiKey = import.meta.env.VITE_AUTH_API_KEY;
-    if (!apiKey) {
-      throw new Error("VITE_AUTH_API_KEY is not set");
+    // The backend holds the voice provider key and builds this clinic's webhook URL.
+    // VITE_PUBLIC_BACKEND_URL: public tunnel to the backend, needed when it runs on localhost.
+    const publicBackendUrl = import.meta.env.VITE_PUBLIC_BACKEND_URL;
+    let data;
+    try {
+      const response = await api.get("/ai/web-call/start/", {
+        params: {
+          participant_name: participantName,
+          participant_identity: participantIdentity,
+          ...(publicBackendUrl ? { webhook_url: publicBackendUrl } : {}),
+        },
+      });
+      data = response.data;
+    } catch (error: any) {
+      throw new Error(error.response?.data?.error || error.message || "Failed to start web call");
     }
-
-    console.log("Sending webCall request to:", agentUrl);
-
-    const response = await fetch(`${agentUrl}/webCall`, {
-      method: "POST",
-      headers: {
-        accept: "application/json",
-        "Content-Type": "application/json",
-        "X-API-Key": apiKey,
-      },
-      body: JSON.stringify({
-        participant_name: participantName,
-        participant_identity: participantIdentity,
-        webhook_url: "https://dlnfm2hm-8001.inc1.devtunnels.ms/api/v1/ai/webhooks/rock8/1/",
-      }),
-    });
-
-    if (!response.ok) {
-      throw new Error(`webCall failed: ${response.status} ${response.statusText}`);
-    }
-
-    const data = await response.json();
     if (!data?.token) {
       throw new Error("webCall response missing token");
     }
-    console.log("Got token successfully");
     return data.token;
   };
 
