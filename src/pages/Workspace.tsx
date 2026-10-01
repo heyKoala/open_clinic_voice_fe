@@ -35,7 +35,7 @@ import { Toaster } from '../components/shadcn/toast'
 import { useRealtimeEvents } from '../hooks/useRealtimeEvents'
 import { useUIStore } from '../store/uistore'
 import { playnotificationsound } from '../components/sounds/soundsmanager';
-import VoiceAgentTest from './VoiceAgentTest';
+import AgentSettings from './AgentSettings';
 import CallAgent from './CallAgent';
 import { Plus } from 'lucide-react';
 import { CreateBranchModal } from '../components/CreateBranchModal';
@@ -643,7 +643,7 @@ function AdminConsole({ user, clinics, hasMultiRole, currentView, onSwitchView, 
     >
       <Routes>
         <Route path="/" element={<Navigate to="dashboard" replace />} />
-        <Route path="ai-settings" element={<VoiceAgentTest />} />
+        <Route path="ai-settings" element={<AgentSettings />} />
         <Route path="call-agent" element={<CallAgent />} />
         <Route path="call-logs" element={<CallLogs />} />
 
