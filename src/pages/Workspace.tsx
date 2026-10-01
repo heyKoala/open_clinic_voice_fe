@@ -8,6 +8,7 @@ import {
 } from 'lucide-react'
 
 import { api } from '../lib/api'
+import { Badge } from '../components/ui/Badge'
 import { Button } from '../components/ui/Button'
 import { Card } from '../components/ui/Card'
 import { Input } from '../components/shadcn/input'
@@ -95,6 +96,7 @@ type SubscriptionSummaryDto = {
 type AppointmentDto = {
   id: number
   patient: number
+  patient_name?: string
   doctor: number
   starts_at: string
   ends_at: string
@@ -1192,18 +1194,20 @@ function ReceptionDesk({ user, clinics, hasMultiRole, currentView, onSwitchView,
                         <th className="px-4 py-3 font-medium">Patient</th>
                         <th className="px-4 py-3 font-medium">Doctor</th>
                         <th className="px-4 py-3 font-medium">Reason</th>
+                        <th className="px-4 py-3 font-medium">Booked by</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 bg-white">
                       {appointments.length === 0 ? (
                         <tr>
-                          <td colSpan={4} className="px-4 py-6 text-center text-slate-500">
+                          <td colSpan={5} className="px-4 py-6 text-center text-slate-500">
                             No upcoming bookings.
                           </td>
                         </tr>
                       ) : (
                         appointments.map((appt) => {
-                          const patient = patientOptions.find(p => p.value === String(appt.patient))?.label || `Patient #${appt.patient}`
+                          // The patient list is only partly loaded, so the name comes with the appointment.
+                          const patient = appt.patient_name || patientOptions.find(p => p.value === String(appt.patient))?.label || `Patient #${appt.patient}`
                           const doctor = doctorOptions.find(d => d.value === String(appt.doctor))?.label || `Doctor #${appt.doctor}`
                           return (
                             <tr key={appt.id}>
@@ -1213,6 +1217,10 @@ function ReceptionDesk({ user, clinics, hasMultiRole, currentView, onSwitchView,
                               <td className="px-4 py-3 text-slate-600">{patient}</td>
                               <td className="px-4 py-3 text-slate-600">{doctor}</td>
                               <td className="px-4 py-3 text-slate-500">{appt.reason || '-'}</td>
+                              <td className="px-4 py-3">
+                                {/* "phone" is set by the AI receptionist's booking tool; everything else is booked by staff. */}
+                                {appt.source === 'phone' ? <Badge variant="purple">AI agent</Badge> : <Badge variant="muted">Receptionist</Badge>}
+                              </td>
                             </tr>
                           )
                         })
