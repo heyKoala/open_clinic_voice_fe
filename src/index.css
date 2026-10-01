@@ -143,77 +143,220 @@ body {
 .animate-drawer-in { animation: drawerIn 180ms ease-out; }
 .animate-live-pulse { animation: livePulse 1.5s infinite ease-in-out; }
 
-/* Calendar MS Teams overrides */
-.rbc-custom-theme .rbc-time-view {
-  @apply border-slate-200 rounded-xl bg-white overflow-auto;
+/* ── Calendar (react-big-calendar) ─────────────────────────────────────────── */
+.rbc-custom-theme {
+  --cal-line: #e9eef4;
+  --cal-hour: 96px;
+  height: 100%;
+  font-family: inherit;
+  color: var(--slate-900);
 }
 
+/* The global 2.75rem touch-target minimum would stretch the calendar's own inline buttons. */
+.rbc-custom-theme button { min-height: 0; }
+
+.rbc-custom-theme .rbc-time-view,
+.rbc-custom-theme .rbc-month-view,
+.rbc-custom-theme .rbc-agenda-view {
+  border: 1px solid var(--cal-line);
+  border-radius: 1rem;
+  background: var(--slate-50);
+  overflow: hidden;
+}
+
+/* Column headers */
 .rbc-custom-theme .rbc-header {
-  @apply py-3 text-xs font-semibold uppercase tracking-wider text-slate-500 border-b-2 border-slate-200 bg-slate-50;
-  min-width: 160px; /* Prevent squishing of doctor names */
+  padding: 0.75rem 0.5rem;
+  border-bottom: 0;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--slate-500);
 }
-
-.rbc-custom-theme .rbc-time-header {
-  @apply bg-slate-50 border-slate-200;
-  position: sticky;
-  top: 0;
-  z-index: 20;
+.rbc-custom-theme .rbc-header + .rbc-header,
+.rbc-custom-theme .rbc-time-header-content,
+.rbc-custom-theme .rbc-day-bg + .rbc-day-bg,
+.rbc-custom-theme .rbc-time-content > * + * > * {
+  border-left: 1px solid var(--cal-line);
 }
+.rbc-custom-theme .rbc-time-header.rbc-overflowing { border-right: 0; }
+.rbc-custom-theme .rbc-allday-cell { display: none; }
 
-.rbc-custom-theme .rbc-time-content {
-  @apply border-t-0 border-slate-200;
-}
-
-.rbc-custom-theme .rbc-day-slot {
-  min-width: 160px; /* Prevent squishing of schedule columns */
-}
-
-.rbc-custom-theme .rbc-time-gutter {
-  @apply text-xs font-medium text-slate-500 bg-white border-r border-slate-200;
-  position: sticky;
-  left: 0;
-  z-index: 30; /* Higher than header so top-left corner stays fixed */
-}
-
-.rbc-custom-theme .rbc-time-header.rbc-overflowing {
-  border-right: none;
-}
-
-.rbc-custom-theme .rbc-today {
-  @apply bg-blue-50/30;
-}
-
-.rbc-custom-theme .rbc-allday-cell {
-  @apply hidden;
-}
-
+/* Time grid */
+.rbc-custom-theme .rbc-time-content { border-top: 1px solid var(--cal-line); }
 .rbc-custom-theme .rbc-timeslot-group {
-  @apply border-slate-200 min-h-[60px];
+  min-height: var(--cal-hour);
+  border-bottom: 1px solid var(--cal-line);
+}
+.rbc-custom-theme .rbc-day-slot .rbc-time-slot { border-top: 0; }
+.rbc-custom-theme .rbc-time-gutter .rbc-label {
+  display: block;
+  padding: 0.5rem 0.75rem 0;
+  font-size: 0.75rem;
+  color: var(--slate-500);
+  white-space: nowrap;
+}
+.rbc-custom-theme .rbc-time-gutter,
+.rbc-custom-theme .rbc-time-header-gutter {
+  background: var(--slate-50);
+  border-right: 0;
+}
+.rbc-custom-theme .rbc-today { background: rgba(15, 23, 42, 0.025); }
+.rbc-custom-theme .rbc-current-time-indicator { height: 2px; background: #ef4444; }
+.rbc-custom-theme .rbc-day-slot .rbc-events-container { margin-right: 2px; }
+.rbc-custom-theme .rbc-slot-selection {
+  border-radius: 0.75rem;
+  background: rgba(15, 23, 42, 0.75);
+  font-size: 0.6875rem;
+  padding: 4px 8px;
 }
 
-.rbc-custom-theme .rbc-time-slot {
-  @apply border-slate-100;
+/* Full-height calendar: the grid scrolls internally, so give each hour more room. */
+.rbc-custom-theme.rbc-roomy { --cal-hour: 120px; }
+
+/* One column per doctor (day view): wide enough for avatar, name and specialty. */
+.rbc-custom-theme .rbc-time-view-resources .rbc-header,
+.rbc-custom-theme .rbc-time-view-resources .rbc-day-bg { width: 210px; }
+.rbc-custom-theme .rbc-time-view-resources .rbc-day-slot { min-width: 210px; }
+.rbc-custom-theme .rbc-time-view-resources .rbc-header { padding: 0.875rem 0.75rem; }
+
+/* Appointment cards (day / week). The event box is the container; the card inside adapts to it. */
+.rbc-custom-theme .rbc-day-slot .rbc-event,
+.rbc-custom-theme .rbc-day-slot .rbc-event.rbc-selected {
+  container: appt / size;
+  padding: 2px 3px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  overflow: visible;
+}
+.rbc-custom-theme .rbc-day-slot .rbc-event:focus { outline: none; }
+.rbc-custom-theme .rbc-day-slot .rbc-event-label { display: none; }
+.rbc-custom-theme .rbc-day-slot .rbc-event-content {
+  width: 100%;
+  height: 100%;
+  line-height: 1.3;
 }
 
-.rbc-custom-theme .rbc-day-slot .rbc-time-slot {
-  @apply border-t border-slate-100;
+.appt-card {
+  position: relative;
+  display: flex;
+  align-items: center;
+  height: 100%;
+  padding: 0 28px 0 10px;
+  overflow: hidden;
+  border: 1px solid var(--slate-200);
+  border-radius: 0.75rem;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  color: var(--slate-900);
+  transition: border-color 150ms, box-shadow 150ms;
+}
+.appt-card:hover,
+.rbc-selected .appt-card {
+  border-color: #cbd5e1;
+  box-shadow: 0 8px 18px -10px rgba(15, 23, 42, 0.25);
+}
+.rbc-event:focus-visible .appt-card { outline: 2px solid var(--slate-900); outline-offset: 1px; }
+.appt-title,
+.appt-sub,
+.appt-time {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.appt-title { font-size: 0.75rem; font-weight: 600; }
+.appt-sub,
+.appt-time { display: none; font-size: 0.6875rem; color: var(--slate-500); }
+.appt-dot {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  width: 14px;
+  height: 14px;
+  border-radius: 9999px;
+  transform: translateY(-50%);
+}
+.appt-card[data-status='cancelled'] { background: var(--slate-50); }
+.appt-card[data-status='cancelled'] .appt-title { color: var(--slate-500); text-decoration: line-through; }
+.appt-card[data-status='needs_reschedule'] { border-style: dashed; border-color: #fbbf24; }
+
+/* Two lines: name + time */
+@container appt (min-height: 40px) {
+  .appt-card {
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: center;
+    gap: 1px;
+    padding: 4px 10px;
+  }
+  .appt-time { display: block; padding-right: 20px; }
+  .appt-dot { top: auto; bottom: 6px; transform: none; }
+}
+/* Three lines: name, reason, time pinned to the bottom */
+@container appt (min-height: 68px) {
+  .appt-card { justify-content: flex-start; gap: 2px; padding: 9px 12px; }
+  .appt-title { font-size: 0.8125rem; }
+  .appt-sub { display: block; }
+  .appt-time { margin-top: auto; color: var(--slate-900); font-weight: 500; }
+  .appt-dot { right: 9px; bottom: 9px; width: 18px; height: 18px; }
+}
+/* Squeezed side by side: drop the marker so the name keeps its space */
+@container appt (max-width: 76px) {
+  .appt-card { justify-content: flex-start; padding: 4px 5px; }
+  .appt-title { font-size: 0.6875rem; }
+  .appt-sub,
+  .appt-time,
+  .appt-dot { display: none; }
 }
 
-.rbc-custom-theme .rbc-time-gutter .rbc-timeslot-group {
-  @apply items-center justify-center border-b border-slate-200;
+/* Month view */
+.rbc-custom-theme .rbc-month-row + .rbc-month-row { border-top: 1px solid var(--cal-line); }
+.rbc-custom-theme .rbc-off-range-bg { background: rgba(15, 23, 42, 0.02); }
+.rbc-custom-theme .rbc-month-view .rbc-today { background: transparent; }
+.rbc-custom-theme .rbc-date-cell { padding: 6px 8px 2px; font-size: 0.75rem; color: #334155; }
+.rbc-custom-theme .rbc-date-cell.rbc-off-range { color: #94a3b8; }
+.rbc-custom-theme .rbc-date-cell .rbc-button-link {
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 9999px;
+  font-weight: 500;
 }
+.rbc-custom-theme .rbc-date-cell.rbc-now .rbc-button-link { background: var(--slate-900); color: #fff; }
+.rbc-custom-theme .rbc-month-view .rbc-event,
+.rbc-custom-theme .rbc-month-view .rbc-event.rbc-selected {
+  padding: 0 6px;
+  background: transparent;
+  color: inherit;
+}
+.rbc-custom-theme .rbc-month-view .rbc-event:focus { outline: none; }
 
-.rbc-custom-theme .rbc-current-time-indicator {
-  @apply bg-red-500 h-[2px];
+/* Agenda view */
+.rbc-custom-theme .rbc-agenda-view { background: #fff; overflow: auto; }
+.rbc-custom-theme .rbc-agenda-view table.rbc-agenda-table { border: 0; }
+.rbc-custom-theme .rbc-agenda-view table.rbc-agenda-table thead > tr > th {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--cal-line);
+  background: var(--slate-50);
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--slate-500);
 }
-
-/* Full-height calendar: the grid scrolls internally, so give each hour room for readable events. */
-.rbc-custom-theme.rbc-roomy .rbc-timeslot-group {
-  min-height: 120px;
+.rbc-custom-theme .rbc-agenda-view table.rbc-agenda-table tbody > tr > td {
+  padding: 0.75rem 1rem;
+  vertical-align: middle;
+  font-size: 0.8125rem;
+  color: #334155;
 }
-
-/* Doctor-per-column day view: react-big-calendar narrows resource columns to 140px while the
-   theme widens headers to 160px, so headers drift out of line. Keep both at 160px. */
-.rbc-custom-theme .rbc-time-view-resources .rbc-day-slot {
-  min-width: 160px;
+.rbc-custom-theme .rbc-agenda-view table.rbc-agenda-table tbody > tr > td + td,
+.rbc-custom-theme .rbc-agenda-view table.rbc-agenda-table thead > tr > th + th { border-left: 0; }
+.rbc-custom-theme .rbc-agenda-view table.rbc-agenda-table tbody > tr + tr { border-top: 1px solid var(--cal-line); }
+.rbc-custom-theme .rbc-agenda-date-cell,
+.rbc-custom-theme .rbc-agenda-time-cell { white-space: nowrap; }
+.rbc-custom-theme .rbc-agenda-view table.rbc-agenda-table tbody > tr > td.rbc-agenda-date-cell {
+  vertical-align: top;
+  font-weight: 600;
+  color: var(--slate-900);
 }
+.rbc-custom-theme .rbc-agenda-empty { padding: 3rem 1rem; text-align: center; font-size: 0.875rem; color: var(--slate-500); }
