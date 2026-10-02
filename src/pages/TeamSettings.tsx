@@ -2,7 +2,8 @@ import { useState, type FormEvent } from 'react'
 import { api } from '../lib/api'
 import { useUIStore } from '../store/uistore'
 import { Button } from '../components/ui/Button'
-import { MoreHorizontal, Shield, Mail, User as UserIcon, UserPlus, Trash2, CheckCircle2 } from 'lucide-react'
+import { EditMemberDialog } from '../components/EditMemberDialog'
+import { MoreHorizontal, Shield, Mail, User as UserIcon, UserPlus, Trash2, CheckCircle2, Pencil } from 'lucide-react'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -23,6 +24,7 @@ export default function TeamSettings({ team, invites, loading, load, user, reloa
   const [inviteRole, setInviteRole] = useState<'doctor' | 'receptionist'>('doctor')
   const { addToast } = useUIStore()
   const [isInviting, setIsInviting] = useState(false)
+  const [editingId, setEditingId] = useState<number | null>(null)
 
   const handleSendInvite = async (e: FormEvent) => {
     e.preventDefault()
@@ -230,7 +232,11 @@ export default function TeamSettings({ team, invites, loading, load, user, reloa
                           <DropdownMenuContent align="end" className="w-48 bg-white rounded-xl shadow-lg border border-slate-100 p-1">
                             <DropdownMenuGroup>
                               <DropdownMenuLabel className="text-xs font-semibold text-slate-400 px-2 py-1.5 uppercase tracking-wider">Actions</DropdownMenuLabel>
-                              
+
+                              <DropdownMenuItem onClick={() => setEditingId(member.id)} className="text-sm px-2 py-2 cursor-pointer hover:bg-slate-50 rounded-lg flex items-center gap-2">
+                                <Pencil className="h-4 w-4 text-slate-400" /> Edit details
+                              </DropdownMenuItem>
+
                               {member.role !== 'clinic_admin' && (
                                 <DropdownMenuItem onClick={() => void toggleMember(member)} className="text-sm px-2 py-2 cursor-pointer hover:bg-slate-50 rounded-lg flex items-center gap-2">
                                   {isActive ? (
@@ -270,6 +276,15 @@ export default function TeamSettings({ team, invites, loading, load, user, reloa
           </div>
         </div>
       </div>
+
+      <EditMemberDialog
+        memberId={editingId}
+        onClose={() => setEditingId(null)}
+        onSaved={async () => {
+          await load()
+          if (editingId === user.id && reloadUser) await reloadUser()
+        }}
+      />
     </div>
   )
 }

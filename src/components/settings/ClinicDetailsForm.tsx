@@ -3,6 +3,7 @@ import { Loader2 } from 'lucide-react'
 import { api } from '../../lib/api'
 import { useUIStore } from '../../store/uistore'
 import { Button } from '../ui/Button'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../shadcn/dialog'
 
 type ClinicForm = {
   name: string
@@ -60,6 +61,51 @@ function fieldErrors(err: any): Record<string, string> {
   )
 }
 
+/** Deletes the active centre after a confirmation, then drops back to the user's main clinic. */
+function DeleteCentre({ clinicId, name }: { clinicId: number; name: string }) {
+  const { addToast } = useUIStore()
+  const [confirming, setConfirming] = useState(false)
+  const [busy, setBusy] = useState(false)
+
+  const remove = async () => {
+    setBusy(true)
+    try {
+      await api.delete(`/clinics/${clinicId}/`)
+      // With no stored centre, the server falls back to the user's own clinic.
+      localStorage.removeItem('active_clinic_id')
+      window.location.reload()
+    } catch (err: any) {
+      addToast(err?.response?.data?.detail || 'Could not delete the centre.', 'error')
+      setBusy(false)
+      setConfirming(false)
+    }
+  }
+
+  return (
+    <Section title="Delete this centre" hint={`Removes ${name} along with its settings, holidays and doctor schedules. A centre that still has patients, staff accounts, call logs or payments can't be deleted.`}>
+      <Button type="button" variant="destructive" className="px-4" onClick={() => setConfirming(true)}>
+        Delete centre
+      </Button>
+      <Dialog open={confirming} onOpenChange={(open) => { if (!busy) setConfirming(open) }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete {name}?</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-slate-600">
+            This centre and its settings will be removed for everyone, and it can't be undone. Your other centres are not affected.
+          </p>
+          <div className="flex justify-end gap-3 pt-2">
+            <Button type="button" variant="secondary" onClick={() => setConfirming(false)} disabled={busy}>Keep it</Button>
+            <Button type="button" onClick={() => void remove()} disabled={busy} className="bg-red-600 hover:bg-red-700">
+              {busy ? 'Deleting…' : 'Delete centre'}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </Section>
+  )
+}
+
 /**
  * Everything about the centre that is currently selected in the header: name, contact details,
  * opening hours and the facts the AI receptionist tells callers.
@@ -67,6 +113,8 @@ function fieldErrors(err: any): Record<string, string> {
 export function ClinicDetailsForm({ onSaved }: { onSaved?: () => Promise<void> | void }) {
   const { addToast } = useUIStore()
   const [clinicId, setClinicId] = useState<number | null>(null)
+  // Only a centre (a clinic with a main clinic above it) can be deleted.
+  const [isCentre, setIsCentre] = useState(false)
   const [form, setForm] = useState<ClinicForm | null>(null)
   const [saved, setSaved] = useState<ClinicForm | null>(null)
   const [specialties, setSpecialties] = useState<string[]>([])
@@ -89,6 +137,7 @@ export function ClinicDetailsForm({ onSaved }: { onSaved?: () => Promise<void> |
           working_hours_end: String(config.working_hours_end ?? '').slice(0, 5),
         } as ClinicForm
         setClinicId(clinic.id)
+        setIsCentre(clinic.parent != null)
         setForm(loaded)
         setSaved(loaded)
       } catch {
@@ -215,6 +264,8 @@ export function ClinicDetailsForm({ onSaved }: { onSaved?: () => Promise<void> |
           </Button>
         </div>
       </div>
+
+      {isCentre && clinicId !== null && <DeleteCentre clinicId={clinicId} name={saved.name} />}
     </form>
   )
 }
