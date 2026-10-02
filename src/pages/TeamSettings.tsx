@@ -279,6 +279,8 @@ export default function TeamSettings({ team, invites, loading, load, user, reloa
 
       <EditMemberDialog
         memberId={editingId}
+        receptionists={(team?.members || []).filter((member: any) =>
+          member.role === 'receptionist' && member.membership_status === 'active' && member.is_active !== false)}
         onClose={() => setEditingId(null)}
         onSaved={async () => {
           await load()

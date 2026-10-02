@@ -21,7 +21,10 @@ type DoctorForm = {
   lunch_from: string
   lunch_to: string
   working_days: number[]
+  receptionists: number[]
 }
+
+export type ReceptionistOption = { id: number; full_name: string }
 
 const TIME_FIELDS = ['available_from', 'available_to', 'lunch_from', 'lunch_to'] as const
 
@@ -54,10 +57,12 @@ function fieldErrors(err: any): Record<string, string> {
 
 /**
  * Lets an admin edit a team member's personal details and, for a doctor, their professional
- * profile and availability. `memberId` null keeps the dialog closed.
+ * profile, availability and front desk. `memberId` null keeps the dialog closed.
+ * `receptionists` are the centre's active receptionists a doctor can be mapped to.
  */
-export function EditMemberDialog({ memberId, onClose, onSaved }: {
+export function EditMemberDialog({ memberId, receptionists, onClose, onSaved }: {
   memberId: number | null
+  receptionists: ReceptionistOption[]
   onClose: () => void
   onSaved: () => Promise<void> | void
 }) {
@@ -92,6 +97,7 @@ export function EditMemberDialog({ memberId, onClose, onSaved }: {
           // "09:00:00" -> "09:00" for the time inputs
           ...Object.fromEntries(TIME_FIELDS.map((key) => [key, String(profile[key] ?? '').slice(0, 5)])),
           working_days: Array.isArray(profile.working_days) ? profile.working_days : [],
+          receptionists: Array.isArray(profile.receptionists) ? profile.receptionists : [],
         } as DoctorForm)
       })
       .catch(() => { if (!cancelled) setLoadError('Could not load this team member.') })
@@ -120,6 +126,8 @@ export function EditMemberDialog({ memberId, onClose, onSaved }: {
             max_patients_per_day: doctor.max_patients_per_day ? parseInt(doctor.max_patients_per_day, 10) : null,
             ...Object.fromEntries(TIME_FIELDS.map((key) => [key, doctor[key] || null])),
             working_days: [...doctor.working_days].sort(),
+            // Only people who can still be picked: someone deactivated since drops off the mapping.
+            receptionists: doctor.receptionists.filter((id) => receptionists.some((r) => r.id === id)),
           },
         }),
       })
@@ -225,6 +233,42 @@ export function EditMemberDialog({ memberId, onClose, onSaved }: {
                     </div>
                     {errors.working_days && <span className="mt-1 block text-xs font-medium text-red-600">{errors.working_days}</span>}
                   </div>
+                </section>
+
+                <section className="space-y-3">
+                  <h3 className="text-sm font-semibold text-slate-900">Front desk</h3>
+                  {receptionists.length <= 1 ? (
+                    <p className="text-sm text-slate-500">
+                      {receptionists.length === 1
+                        ? `${receptionists[0].full_name} is the only receptionist, so they manage every doctor. `
+                        : 'There is no receptionist yet. '}
+                      Once this centre has more than one receptionist, you can choose who manages this doctor here.
+                    </p>
+                  ) : (
+                    <div>
+                      <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-slate-500">Managed by</span>
+                      <div className="flex flex-wrap gap-2">
+                        {receptionists.map((person) => {
+                          const on = doctor.receptionists.includes(person.id)
+                          return (
+                            <button
+                              key={person.id}
+                              type="button"
+                              aria-pressed={on}
+                              onClick={() => setDoc('receptionists', on ? doctor.receptionists.filter((id) => id !== person.id) : [...doctor.receptionists, person.id])}
+                              className={`!min-h-0 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${on ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-300 bg-white text-slate-600 hover:text-slate-900'}`}
+                            >
+                              {person.full_name}
+                            </button>
+                          )
+                        })}
+                      </div>
+                      <span className="mt-1 block text-xs text-slate-500">
+                        This doctor shows on the dashboard of the receptionists you pick. Pick nobody and every receptionist sees them.
+                      </span>
+                      {errors.receptionists && <span className="mt-1 block text-xs font-medium text-red-600">{errors.receptionists}</span>}
+                    </div>
+                  )}
                 </section>
               </>
             )}

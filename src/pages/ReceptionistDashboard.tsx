@@ -71,8 +71,10 @@ export default function ReceptionistDashboard() {
 
   const loadData = async () => {
     try {
-      const [doctorsRes, apptsRes, meRes] = await Promise.all([
-        api.get('/doctors/', { params: { page_size: 50 } }),
+      const [doctorsRes, apptsRes] = await Promise.all([
+        // desk=mine: every doctor when this centre has one receptionist, otherwise the doctors an
+        // admin mapped to this receptionist on the Access page (plus any doctor mapped to nobody).
+        api.get('/doctors/', { params: { page_size: 50, desk: 'mine' } }),
         api.get('/appointments/', {
           params: {
             starts_at_after: new Date(new Date().setHours(0,0,0,0)).toISOString(),
@@ -80,19 +82,9 @@ export default function ReceptionistDashboard() {
             page_size: 500
           }
         }),
-        api.get('/accounts/me/')
       ])
 
-      const allDoctors = doctorsRes.data.results || doctorsRes.data
-      const myId = meRes.data?.id || 1
-      
-      // Simple logic to divide doctors among receptionists (assumes ~2 receptionists)
-      // This splits the doctors array in half based on whether the receptionist's ID is even or odd
-      const halfIndex = Math.ceil(allDoctors.length / 2)
-      const isEvenId = myId % 2 === 0
-      const myDoctors = isEvenId ? allDoctors.slice(halfIndex) : allDoctors.slice(0, halfIndex)
-
-      setDoctors(myDoctors)
+      setDoctors(doctorsRes.data.results || doctorsRes.data)
       setAppointments(apptsRes.data.results || apptsRes.data)
     } catch (err) {
       console.error('Failed to load dashboard data', err)
