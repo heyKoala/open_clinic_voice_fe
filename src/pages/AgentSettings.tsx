@@ -262,7 +262,7 @@ function StageEditor({
   )
 }
 
-/** AI Settings: the receptionist's greeting, instructions and the models it runs on. */
+/** The AI receptionist tab of Settings: its greeting, instructions and the models it runs on. */
 export default function AgentSettingsPage() {
   const { addToast } = useUIStore()
   const [settings, setSettings] = useState<AgentSettings | null>(null)
@@ -322,7 +322,7 @@ export default function AgentSettingsPage() {
   return (
     <div className="max-w-4xl space-y-6">
       <div>
-        <h2 className="text-2xl font-bold tracking-tight text-slate-900">AI Receptionist Settings</h2>
+        <h3 className="text-lg font-semibold text-slate-900">AI receptionist</h3>
         <p className="mt-1 text-sm text-slate-500">
           What the receptionist says and the models it runs on, for {settings.owner_clinic.name} and its centres.
         </p>
