@@ -2,9 +2,9 @@
 import { useEffect, useMemo, useState, useRef, type FormEvent, type ReactNode } from 'react'
 import { Link, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { 
-  ArrowRight, Edit2, RefreshCw, Sparkles, LayoutDashboard,
+  ArrowRight, RefreshCw, Sparkles, LayoutDashboard,
   Users, CalendarDays, ClipboardList, CreditCard, 
-  FileBarChart, Settings as SettingsIcon, Sliders, PhoneCall, ListTodo
+  FileBarChart, Settings as SettingsIcon, PhoneCall, ListTodo
 } from 'lucide-react'
 
 import { api } from '../lib/api'
@@ -19,7 +19,6 @@ import { PhoneInput } from '../components/ui/PhoneInput'
 import { DateTimePickerAmPm } from '../components/ui/DateTimePickerAmPm'
 import AccountMenu from '../components/AccountMenu'
 import { CalendarView } from '../components/CalendarView'
-import Settings from './Settings'
 import DoctorDashboard from './DoctorDashboard'
 import ReceptionistDashboard from './ReceptionistDashboard'
 import Dashboard from './Dashboard'
@@ -36,7 +35,7 @@ import { Toaster } from '../components/shadcn/toast'
 import { useRealtimeEvents } from '../hooks/useRealtimeEvents'
 import { useUIStore } from '../store/uistore'
 import { playnotificationsound } from '../components/sounds/soundsmanager';
-import AgentSettings from './AgentSettings';
+import ClinicSettings from './ClinicSettings';
 import CallAgent from './CallAgent';
 import { Plus } from 'lucide-react';
 import { CreateBranchModal } from '../components/CreateBranchModal';
@@ -479,8 +478,6 @@ function AdminConsole({ user, clinics, hasMultiRole, currentView, onSwitchView, 
   const [, setPatients] = useState<PatientDto[]>([])
   const [subscription, setSubscription] = useState<SubscriptionSummaryDto | null>(null)
   const [reports, setReports] = useState<{ templates: ReportTemplateDto[]; executions: ReportExecutionDto[] }>({ templates: [], executions: [] })
-  const [clinicConfig, setClinicConfig] = useState<Record<string, unknown> | null>(null)
-  const [isEditingConfig, setIsEditingConfig] = useState(false)
   const [inviteEmail, setInviteEmail] = useState('')
   const [inviteRole, setInviteRole] = useState<'doctor' | 'receptionist'>('doctor')
   const [upgradePlan, setUpgradePlan] = useState('growth')
@@ -491,11 +488,10 @@ function AdminConsole({ user, clinics, hasMultiRole, currentView, onSwitchView, 
   const load = async () => {
     setLoading(true)
     try {
-      const [teamRes, dashboardRes, subscriptionRes, configRes, templatesRes, executionsRes, invitesRes, patientsRes] = await Promise.all([
+      const [teamRes, dashboardRes, subscriptionRes, templatesRes, executionsRes, invitesRes, patientsRes] = await Promise.all([
         api.get('/accounts/access/'),
         api.get('/accounts/dashboard/'),
         api.get('/subscriptions/summary/'),
-        api.get('/clinics/configuration/'),
         api.get('/reports/templates/'),
         api.get('/reports/executions/'),
         api.get('/accounts/invites/'),
@@ -506,7 +502,6 @@ function AdminConsole({ user, clinics, hasMultiRole, currentView, onSwitchView, 
       setInvites(unwrapList<InviteDto>(invitesRes.data))
       setPatients(unwrapList<PatientDto>(patientsRes.data))
       setSubscription(subscriptionRes.data as SubscriptionSummaryDto)
-      setClinicConfig((configRes.data ?? null) as Record<string, unknown> | null)
       setReports({ templates: unwrapList<ReportTemplateDto>(templatesRes.data), executions: unwrapList<ReportExecutionDto>(executionsRes.data) })
     } catch {
       addToast('Could not load admin data.', 'error')
@@ -524,25 +519,6 @@ function AdminConsole({ user, clinics, hasMultiRole, currentView, onSwitchView, 
       void load()
     }
   })
-
-  const updateConfigValue = (key: string, value: unknown) => {
-    setClinicConfig(prev => prev ? { ...prev, [key]: value } : prev)
-  }
-
-  const saveConfig = async (e: FormEvent) => {
-    e.preventDefault()
-    if (!clinicConfig) return
-    try {
-      await api.patch('/clinics/configuration/', clinicConfig)
-      addToast('Configuration saved successfully.', 'success')
-      setIsEditingConfig(false)
-      await load()
-    } catch (err: any) {
-      addToast('Failed to update settings.', 'error')
-    }
-  }
-
-
 
   const sendInvite = async (event: FormEvent) => {
     event.preventDefault()
@@ -634,8 +610,7 @@ function AdminConsole({ user, clinics, hasMultiRole, currentView, onSwitchView, 
         { label: 'Patients', href: '/app/patients', icon: <ClipboardList className="h-4 w-4 opacity-70" /> },
         { label: 'Billing and upgrade', href: '/app/billing', icon: <CreditCard className="h-4 w-4 opacity-70" /> },
         { label: 'Reports', href: '/app/reports', icon: <FileBarChart className="h-4 w-4 opacity-70" /> },
-        { label: 'Configuration', href: '/app/configuration', icon: <Sliders className="h-4 w-4 opacity-70" /> },
-        { label: 'AI Settings', href: '/app/ai-settings', icon: <SettingsIcon className="h-4 w-4 opacity-70" /> },
+        { label: 'Settings', href: '/app/settings', icon: <SettingsIcon className="h-4 w-4 opacity-70" /> },
         { label: 'Call Logs', href: '/app/call-logs', icon: <PhoneCall className="h-4 w-4 opacity-70" /> },
         { label: 'Test AI Call', href: '/app/call-agent', icon: <PhoneCall className="h-4 w-4 opacity-70" /> },
       ]}
@@ -645,7 +620,10 @@ function AdminConsole({ user, clinics, hasMultiRole, currentView, onSwitchView, 
     >
       <Routes>
         <Route path="/" element={<Navigate to="dashboard" replace />} />
-        <Route path="ai-settings" element={<AgentSettings />} />
+        <Route path="settings" element={<ClinicSettings onClinicSaved={reloadUser} />} />
+        {/* Old addresses of the two pages that Settings replaced. */}
+        <Route path="configuration" element={<Navigate to="/app/settings" replace />} />
+        <Route path="ai-settings" element={<Navigate to="/app/settings?tab=ai" replace />} />
         <Route path="call-agent" element={<CallAgent />} />
         <Route path="call-logs" element={<CallLogs />} />
 
@@ -774,137 +752,6 @@ function AdminConsole({ user, clinics, hasMultiRole, currentView, onSwitchView, 
                 )
               })}
             </div>
-          </div>
-        } />
-
-        <Route path="configuration" element={
-          <div className="grid gap-6 xl:grid-cols-[1.35fr_0.95fr]">
-            <div className="space-y-6">
-              <Card className="space-y-4 p-5" id="configuration">
-                <div className="flex items-center justify-between border-b border-slate-100 pb-4">
-                  <div>
-                    <h3 className="text-lg font-semibold text-slate-950">Clinic configuration</h3>
-                    <p className="text-sm text-slate-500">Manage global AI and workflow settings.</p>
-                  </div>
-                  {!isEditingConfig && (
-                    <button type="button" onClick={() => setIsEditingConfig(true)} className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50">
-                      <Edit2 className="h-4 w-4" /> Edit
-                    </button>
-                  )}
-                </div>
-
-                {clinicConfig ? (
-                  isEditingConfig ? (
-                    <form onSubmit={saveConfig} className="space-y-6">
-                      <div className="grid gap-6 md:grid-cols-2">
-                        {/* Toggles */}
-                        <div className="space-y-4">
-                          <h4 className="text-sm font-semibold text-slate-900 uppercase tracking-wider">Features</h4>
-
-                          <label className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 p-4 transition-colors hover:bg-slate-100 cursor-pointer">
-                            <div>
-                              <p className="text-sm font-medium text-slate-900">Enable AI Features</p>
-                              <p className="text-xs text-slate-500">Core AI functionalities</p>
-                            </div>
-                            <input type="checkbox" className="h-5 w-5 rounded border-slate-300 text-emerald-600 focus:ring-emerald-600" checked={Boolean(clinicConfig.ai_enabled)} onChange={(e) => updateConfigValue('ai_enabled', e.target.checked)} />
-                          </label>
-
-                          <label className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 p-4 transition-colors hover:bg-slate-100 cursor-pointer">
-                            <div>
-                              <p className="text-sm font-medium text-slate-900">AI Voice Calling</p>
-                              <p className="text-xs text-slate-500">Automated patient outreach</p>
-                            </div>
-                            <input type="checkbox" className="h-5 w-5 rounded border-slate-300 text-emerald-600 focus:ring-emerald-600" checked={Boolean(clinicConfig.ai_voice_enabled)} onChange={(e) => updateConfigValue('ai_voice_enabled', e.target.checked)} />
-                          </label>
-
-                          <label className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 p-4 transition-colors hover:bg-slate-100 cursor-pointer">
-                            <div>
-                              <p className="text-sm font-medium text-slate-900">AI Transcripts</p>
-                              <p className="text-xs text-slate-500">Consultation speech-to-text</p>
-                            </div>
-                            <input type="checkbox" className="h-5 w-5 rounded border-slate-300 text-emerald-600 focus:ring-emerald-600" checked={Boolean(clinicConfig.ai_transcription_enabled)} onChange={(e) => updateConfigValue('ai_transcription_enabled', e.target.checked)} />
-                          </label>
-                        </div>
-
-                        {/* Inputs */}
-                        <div className="space-y-4">
-                          <h4 className="text-sm font-semibold text-slate-900 uppercase tracking-wider">Preferences</h4>
-
-                          <div>
-                            <label className="mb-1.5 block text-sm font-medium text-slate-700">AI Default Language</label>
-                            <select className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm" value={String(clinicConfig.ai_default_language || 'en')} onChange={(e) => updateConfigValue('ai_default_language', e.target.value)}>
-                              <option value="en">English</option>
-                              <option value="hi">Hindi</option>
-                              <option value="es">Spanish</option>
-                              <option value="fr">French</option>
-                            </select>
-                          </div>
-
-                          <div>
-                            <label className="mb-1.5 block text-sm font-medium text-slate-700">Consultation Minutes (Default)</label>
-                            <input type="number" min="5" max="120" step="5" className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm" value={Number(clinicConfig.default_consultation_minutes || 15)} onChange={(e) => updateConfigValue('default_consultation_minutes', parseInt(e.target.value, 10))} />
-                          </div>
-
-                          <div>
-                            <label className="mb-1.5 block text-sm font-medium text-slate-700">Timezone</label>
-                            <select className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm" value={String(clinicConfig.timezone || 'UTC')} onChange={(e) => updateConfigValue('timezone', e.target.value)}>
-                              <option value="UTC">UTC</option>
-                              <option value="Asia/Kolkata">Indian (IST)</option>
-                              <option value="America/New_York">Eastern (EST)</option>
-                              <option value="Europe/London">London (GMT)</option>
-                            </select>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="flex gap-3 justify-end border-t border-slate-100 pt-5">
-                        <button type="button" onClick={() => { setIsEditingConfig(false); void load(); }} className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors">Cancel</button>
-                        <Button variant="default" type="submit">Save Changes</Button>
-                      </div>
-                    </form>
-                  ) : (
-                    <div className="grid gap-3 md:grid-cols-2">
-                      {Object.entries(clinicConfig || {}).slice(0, 8).map(([key, value]) => {
-                        let displayValue = String(value)
-                        if (key === 'timezone' && displayValue === 'UTC') displayValue = 'Indian (IST)'
-                        return (
-                          <div key={key} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                            <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">{key.replace(/_/g, ' ')}</p>
-                            <p className="mt-1 text-sm font-medium text-slate-900">{displayValue}</p>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  )
-                ) : (
-                  <p className="text-sm text-slate-500">Loading configuration...</p>
-                )}
-              </Card>
-            </div>
-            <div className="space-y-6">
-
-              <Card className="space-y-4 p-5">
-                <h3 className="text-lg font-semibold text-slate-950">Reports snapshot</h3>
-                <div className="space-y-3">
-                  {(reports?.templates || []).slice(0, 3).map((template) => (
-                    <div key={template.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                      <p className="font-medium text-slate-900">{template.name}</p>
-                      <p className="text-sm text-slate-500">{template.report_type_display} · {template.format_display}</p>
-                      <p className="text-xs text-slate-500">Roles: {template.allowed_roles_display.join(', ')}</p>
-                    </div>
-                  ))}
-                </div>
-                <Link to="/app/reports" className="inline-flex items-center gap-2 text-sm font-semibold text-emerald-700">
-                  Open reports <ArrowRight className="h-4 w-4" />
-                </Link>
-              </Card>
-            </div>
-          </div>
-        } />
-
-        <Route path="ai-settings" element={
-          <div className="max-w-6xl">
-            <Settings />
           </div>
         } />
 
