@@ -32,6 +32,7 @@ export function PatientFormDialog({ isOpen, onOpenChange, onSuccess, patient }: 
   const [newPatientDraft, setNewPatientDraft] = useState({
     full_name: '',
     phone_number: '',
+    email: '',
     preferred_language: 'English',
     date_of_birth: '',
     gender: 'unspecified',
@@ -52,6 +53,7 @@ export function PatientFormDialog({ isOpen, onOpenChange, onSuccess, patient }: 
       setNewPatientDraft({
         full_name: patient.full_name || '',
         phone_number: phone.number,
+        email: patient.email || '',
         preferred_language: patient.preferred_language || 'English',
         date_of_birth: patient.date_of_birth || '',
         gender: patient.gender || 'unspecified',
@@ -77,6 +79,7 @@ export function PatientFormDialog({ isOpen, onOpenChange, onSuccess, patient }: 
       const payload = {
         full_name: newPatientDraft.full_name,
         phone: fullPhone,
+        email: newPatientDraft.email.trim(),
         preferred_language: newPatientDraft.preferred_language || 'en',
         date_of_birth: newPatientDraft.date_of_birth || null,
         gender: newPatientDraft.gender,
@@ -111,7 +114,7 @@ export function PatientFormDialog({ isOpen, onOpenChange, onSuccess, patient }: 
       
       onOpenChange(false)
       setNewPatientDraft({ 
-        full_name: '', phone_number: '', preferred_language: 'English', date_of_birth: '', 
+        full_name: '', phone_number: '', email: '', preferred_language: 'English', date_of_birth: '', 
         gender: 'unspecified', blood_group: 'unknown', emergency_contact_name: '', emergency_contact_phone: '', 
         allergies: '', medications: '', illnesses: '', surgeries: '' 
       })
@@ -179,14 +182,17 @@ export function PatientFormDialog({ isOpen, onOpenChange, onSuccess, patient }: 
                   </SelectContent>
                 </Select>
               </div>
-              <div className="space-y-2 md:col-span-2">
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-700">Email</label>
+                <Input type="email" placeholder="e.g. priya@example.com" value={newPatientDraft.email} onChange={(e) => setNewPatientDraft(curr => ({...curr, email: e.target.value}))} />
+              </div>
+              <div className="space-y-2">
                 <label className="text-sm font-medium text-slate-700">Preferred Language</label>
                 <Select value={newPatientDraft.preferred_language} onValueChange={(val) => setNewPatientDraft((curr) => ({ ...curr, preferred_language: val || "" }))}>
                   <SelectTrigger><SelectValue placeholder="Preferred Language" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="English">English</SelectItem>
-                    <SelectItem value="Hindi">Hindi</SelectItem>
-                    <SelectItem value="Kannada">Kannada</SelectItem>
+                    <SelectItem value="Arabic">Arabic</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

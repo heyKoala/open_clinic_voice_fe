@@ -39,6 +39,8 @@ export default function PatientWorkspace({ canEdit = true }: { canEdit?: boolean
   const pageSize = 20
   const [loadingList, setLoadingList] = useState(false)
   const [isAddModalOpen, setIsAddModalOpen] = useState(false)
+  const [patientToEdit, setPatientToEdit] = useState<any>(null)
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false)
   const [selectedPatientId, setSelectedPatientId] = useState<number | null>(null)
   const [patient, setPatient] = useState<any>(null)
   const [appointments, setAppointments] = useState<any[]>([])
@@ -140,6 +142,12 @@ export default function PatientWorkspace({ canEdit = true }: { canEdit?: boolean
     void fetchDetails()
   }, [selectedPatientId])
 
+  const handlePatientUpdated = async (patientId: number) => {
+    // The name shows in the directory too, so reload both panes.
+    void fetchPatients()
+    if (patientId === selectedPatientId) await fetchDetails()
+  }
+
   const filteredPatients = patients
 
   const formatDate = (dateStr: string | null | undefined) => {
@@ -168,6 +176,12 @@ export default function PatientWorkspace({ canEdit = true }: { canEdit?: boolean
                   isOpen={isAddModalOpen} 
                   onOpenChange={setIsAddModalOpen} 
                   onSuccess={handlePatientCreated} 
+                />
+                <PatientFormDialog
+                  isOpen={isEditModalOpen}
+                  onOpenChange={setIsEditModalOpen}
+                  patient={patientToEdit}
+                  onSuccess={handlePatientUpdated}
                 />
               </>
             )}
@@ -308,17 +322,19 @@ export default function PatientWorkspace({ canEdit = true }: { canEdit?: boolean
             <p className="text-sm text-slate-500 text-center py-4">No patients found.</p>
           ) : (
             filteredPatients.map((pt: any) => (
-              <button
+              <div
                 key={pt.id}
-                onClick={() => setSelectedPatientId(pt.id)}
-                className={`w-full text-left p-3 rounded-xl border transition-all ${
+                className={`w-full p-3 rounded-xl border transition-all ${
                   selectedPatientId === pt.id 
                     ? 'bg-blue-50/50 border-blue-200 shadow-sm ring-1 ring-blue-500/10' 
                     : 'bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50'
                 }`}
               >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
+                <div className="flex items-center justify-between gap-2">
+                  <button
+                    onClick={() => setSelectedPatientId(pt.id)}
+                    className="flex flex-1 min-w-0 items-center gap-3 text-left"
+                  >
                     <div className="h-10 w-10 rounded-full bg-slate-200 flex flex-shrink-0 items-center justify-center overflow-hidden border border-white shadow-sm">
                       <span className="text-sm font-bold text-slate-500">
                         {pt.full_name.charAt(0).toUpperCase()}
@@ -330,14 +346,19 @@ export default function PatientWorkspace({ canEdit = true }: { canEdit?: boolean
                       </p>
                       <p className="text-[11px] text-slate-500 mt-0.5">Register: {formatDate(pt.created_at)}</p>
                     </div>
-                  </div>
+                  </button>
                   {canEdit && (
-                    <div className="text-slate-400">
+                    <button
+                      onClick={() => { setPatientToEdit(pt); setIsEditModalOpen(true) }}
+                      className="shrink-0 rounded-md p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                      title="Edit patient"
+                      aria-label={`Edit ${pt.full_name}`}
+                    >
                       <Edit className="h-4 w-4" />
-                    </div>
+                    </button>
                   )}
                 </div>
-              </button>
+              </div>
             ))
           )}
         </div>
@@ -378,10 +399,10 @@ export default function PatientWorkspace({ canEdit = true }: { canEdit?: boolean
           </div>
         ) : (
           <div className="space-y-6 pb-6 pr-4">
-            <PatientProfileHeader patient={patient} canEdit={canEdit} />
+            <PatientProfileHeader patient={patient} canEdit={canEdit} onRefresh={() => handlePatientUpdated(patient.id)} />
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <PatientBasicInfo patient={patient} />
-              <PatientAppointmentTimeline appointments={appointments} />
+              <PatientAppointmentTimeline appointments={appointments} patientId={patient.id} canEdit={canEdit} onRefresh={fetchDetails} />
             </div>
             <PatientClinicalHistory 
               patientId={patient.id} 

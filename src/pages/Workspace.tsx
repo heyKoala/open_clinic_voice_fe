@@ -636,7 +636,7 @@ function AdminConsole({ user, clinics, hasMultiRole, currentView, onSwitchView, 
           </div>
         } />
 
-        <Route path="patients" element={<PatientWorkspace canEdit={false} />} />
+        <Route path="patients" element={<PatientWorkspace />} />
 
         <Route path="billing" element={
           <div className="w-full h-full flex flex-col space-y-6">
