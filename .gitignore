@@ -32,3 +32,6 @@ lerna-debug.log*
 *.sln
 *.sw?
 .claude/
+
+# Client knowledge-base sources (uploaded into the platform, not app code)
+knowledge/
