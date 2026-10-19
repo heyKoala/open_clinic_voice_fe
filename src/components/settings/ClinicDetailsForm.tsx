@@ -141,7 +141,7 @@ export function ClinicDetailsForm({ onSaved }: { onSaved?: () => Promise<void> |
         setForm(loaded)
         setSaved(loaded)
       } catch {
-        if (!cancelled) setLoadError('Could not load the clinic details.')
+        if (!cancelled) setLoadError('Could not load the hospital details.')
       }
       try {
         const res = await api.get('/doctors/', { params: { page_size: 100 } })
@@ -173,12 +173,12 @@ export function ClinicDetailsForm({ onSaved }: { onSaved?: () => Promise<void> |
       await api.patch(`/clinics/${clinicId}/`, Object.fromEntries(CLINIC_FIELDS.map((key) => [key, form[key]])))
       await api.patch('/clinics/configuration/', Object.fromEntries(HOURS_FIELDS.map((key) => [key, form[key]])))
       setSaved(form)
-      addToast('Clinic details saved.', 'success')
+      addToast('Hospital details saved.', 'success')
       await onSaved?.()
     } catch (err) {
       const found = fieldErrors(err)
       setErrors(found)
-      addToast(Object.values(found)[0] || 'Could not save the clinic details.', 'error')
+      addToast(Object.values(found)[0] || 'Could not save the hospital details.', 'error')
     } finally {
       setSaving(false)
     }
@@ -193,15 +193,15 @@ export function ClinicDetailsForm({ onSaved }: { onSaved?: () => Promise<void> |
 
   return (
     <form onSubmit={save} className="space-y-6">
-      <Section title="Basics" hint={`You are editing ${saved.name}. To edit another centre, pick it in the Clinic menu at the top of the page.`}>
+      <Section title="Basics" hint="The hospital's name, type and address.">
         <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Clinic name" error={errors.name} hint="Shown across the app. The AI receptionist greets callers with the main clinic's name.">
+          <Field label="Hospital name" error={errors.name} hint="Shown across the app. The AI receptionist greets callers with this name.">
             {text('name', { required: true })}
           </Field>
-          <Field label="Clinic type" error={errors.clinic_type}>
+          <Field label="Hospital type" error={errors.clinic_type}>
             <select className={inputClass} value={form.clinic_type} onChange={(e) => set('clinic_type', e.target.value)}>
               <option value="single_doctor">Single doctor practice</option>
-              <option value="multi_doctor">Multi-doctor clinic</option>
+              <option value="multi_doctor">Multi-doctor hospital</option>
             </select>
           </Field>
         </div>
@@ -213,7 +213,7 @@ export function ClinicDetailsForm({ onSaved }: { onSaved?: () => Promise<void> |
       <Section title="Contact" hint="How patients reach the front desk. The AI receptionist's own number is under Phone number.">
         <div className="grid gap-4 sm:grid-cols-3">
           <Field label="Front desk phone" error={errors.phone}>{text('phone', { type: 'tel', placeholder: '+91 80 1234 5678' })}</Field>
-          <Field label="Support email" error={errors.support_email}>{text('support_email', { type: 'email', placeholder: 'hello@clinic.com' })}</Field>
+          <Field label="Support email" error={errors.support_email}>{text('support_email', { type: 'email', placeholder: 'hello@hospital.com' })}</Field>
           <Field label="Website" error={errors.website}>{text('website', { type: 'url', placeholder: 'https://…' })}</Field>
         </div>
       </Section>
@@ -232,9 +232,9 @@ export function ClinicDetailsForm({ onSaved }: { onSaved?: () => Promise<void> |
         </div>
       </Section>
 
-      <Section title="What the AI receptionist tells callers" hint="Written in plain sentences. The receptionist uses these, with the address and contact details above, to answer questions about this centre.">
-        <Field label="About the clinic" error={errors.description}>
-          {area('description', 'We are a multi-specialty clinic focused on…')}
+      <Section title="What the AI receptionist tells callers" hint="Written in plain sentences. The receptionist uses these, with the address and contact details above, to answer questions about the hospital.">
+        <Field label="About the hospital" error={errors.description}>
+          {area('description', 'We are a multi-specialty hospital focused on…')}
         </Field>
         <Field label="Facilities and amenities" error={errors.facilities}>
           {area('facilities', 'Free basement parking, wheelchair ramp at the entrance, on-site pharmacy…')}
@@ -260,7 +260,7 @@ export function ClinicDetailsForm({ onSaved }: { onSaved?: () => Promise<void> |
             Discard
           </Button>
           <Button type="submit" variant="default" className="px-4" disabled={!isDirty || saving}>
-            {saving ? 'Saving…' : 'Save clinic details'}
+            {saving ? 'Saving…' : 'Save hospital details'}
           </Button>
         </div>
       </div>

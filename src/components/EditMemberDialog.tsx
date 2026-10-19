@@ -242,7 +242,7 @@ export function EditMemberDialog({ memberId, receptionists, onClose, onSaved }: 
                       {receptionists.length === 1
                         ? `${receptionists[0].full_name} is the only receptionist, so they manage every doctor. `
                         : 'There is no receptionist yet. '}
-                      Once this centre has more than one receptionist, you can choose who manages this doctor here.
+                      Once the hospital has more than one receptionist, you can choose who manages this doctor here.
                     </p>
                   ) : (
                     <div>

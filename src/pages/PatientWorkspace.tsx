@@ -10,8 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { PatientProfileHeader } from '../components/patient-profile/PatientProfileHeader'
 import { PatientBasicInfo } from '../components/patient-profile/PatientBasicInfo'
 import { PatientAppointmentTimeline } from '../components/patient-profile/PatientAppointmentTimeline'
-import { PatientClinicalHistory } from '../components/patient-profile/PatientClinicalHistory'
-import { PatientDocuments } from '../components/patient-profile/PatientDocuments'
+import { PatientCallHistory } from '../components/patient-profile/PatientCallHistory'
 import { PatientFormDialog } from '../components/patient-profile/PatientFormDialog'
 
 // Types
@@ -26,7 +25,7 @@ type Patient = {
   created_at?: string
 }
 
-export default function PatientWorkspace({ canEdit = true }: { canEdit?: boolean }) {
+export default function PatientWorkspace({ canEdit = true, callDetailPath }: { canEdit?: boolean; /** Where a call in the patient's call history opens, e.g. /app/calls. */ callDetailPath?: string }) {
   const [search, setSearch] = useState('')
   
   // Pagination & Filtering state
@@ -44,8 +43,6 @@ export default function PatientWorkspace({ canEdit = true }: { canEdit?: boolean
   const [selectedPatientId, setSelectedPatientId] = useState<number | null>(null)
   const [patient, setPatient] = useState<any>(null)
   const [appointments, setAppointments] = useState<any[]>([])
-  const [healthRecords, setHealthRecords] = useState<any[]>([])
-  const [attachments, setAttachments] = useState<any[]>([])
   const [filters, setFilters] = useState<any>({})
   const [loadingDetails, setLoadingDetails] = useState(false)
   const searchInputRef = useRef<HTMLInputElement>(null)
@@ -121,16 +118,12 @@ export default function PatientWorkspace({ canEdit = true }: { canEdit?: boolean
     if (!selectedPatientId) return
     setLoadingDetails(true)
     try {
-      const [ptRes, apptRes, hrRes, attRes] = await Promise.all([
+      const [ptRes, apptRes] = await Promise.all([
         api.get(`/patients/${selectedPatientId}/`),
         api.get('/appointments/', { params: { patient: selectedPatientId } }),
-        api.get('/clinical/health-records/', { params: { patient: selectedPatientId } }),
-        api.get('/clinical/attachments/', { params: { patient: selectedPatientId } })
       ])
       setPatient(ptRes.data)
       setAppointments(apptRes.data.results || apptRes.data)
-      setHealthRecords(hrRes.data.results || hrRes.data)
-      setAttachments(attRes.data.results || attRes.data)
     } catch (err) {
       console.error("Failed to fetch patient details", err)
     } finally {
@@ -402,18 +395,9 @@ export default function PatientWorkspace({ canEdit = true }: { canEdit?: boolean
             <PatientProfileHeader patient={patient} canEdit={canEdit} onRefresh={() => handlePatientUpdated(patient.id)} />
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <PatientBasicInfo patient={patient} />
-              <PatientAppointmentTimeline appointments={appointments} patientId={patient.id} canEdit={canEdit} onRefresh={fetchDetails} />
+              <PatientAppointmentTimeline appointments={appointments} patientId={patient.id} patientName={patient.full_name} canEdit={canEdit} onRefresh={fetchDetails} />
             </div>
-            <PatientClinicalHistory 
-              patientId={patient.id} 
-              healthRecords={healthRecords} 
-              onRefresh={fetchDetails} 
-            />
-            <PatientDocuments 
-              patientId={patient.id} 
-              attachments={attachments} 
-              onRefresh={fetchDetails} 
-            />
+            <PatientCallHistory patientId={patient.id} phone={patient.phone} detailPath={callDetailPath} />
           </div>
         )}
       </div>

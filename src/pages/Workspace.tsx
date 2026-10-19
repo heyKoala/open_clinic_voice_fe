@@ -1,44 +1,38 @@
 // @ts-nocheck
 import { useEffect, useMemo, useState, useRef, type FormEvent, type ReactNode } from 'react'
-import { Link, Routes, Route, Navigate, useLocation } from 'react-router-dom'
-import { 
-  ArrowRight, RefreshCw, Sparkles, LayoutDashboard,
-  Users, CalendarDays, ClipboardList, CreditCard, 
+import { Link, Routes, Route, Navigate } from 'react-router-dom'
+import {
+  Sparkles, LayoutDashboard, CalendarDays, ClipboardList,
   FileBarChart, Settings as SettingsIcon, PhoneCall, ListTodo
 } from 'lucide-react'
 
 import { api } from '../lib/api'
-import { Badge } from '../components/ui/Badge'
 import { Button } from '../components/ui/Button'
 import { Card } from '../components/ui/Card'
-import { Input } from '../components/shadcn/input'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/shadcn/select'
-import { Label } from '../components/shadcn/label'
 import { AmPmTimePicker, formatAmPm } from '../components/ui/AmPmTimePicker'
-import { PhoneInput } from '../components/ui/PhoneInput'
 import { DateTimePickerAmPm } from '../components/ui/DateTimePickerAmPm'
-import AccountMenu from '../components/AccountMenu'
+import { AppShell } from '../components/layout/AppShell'
 import { CalendarView } from '../components/CalendarView'
 import DoctorDashboard from './DoctorDashboard'
-import ReceptionistDashboard from './ReceptionistDashboard'
-import Dashboard from './Dashboard'
-import Patients from './Patients'
 import CallLogs from './CallLogs'
+import CallDetail from './CallDetail'
+import Reports from './Reports'
+import Appointments from './Appointments'
+import Doctors from './Doctors'
+import FrontDesk from './FrontDesk'
+import { Views } from 'react-big-calendar'
 import TeamSettings from './TeamSettings'
 import ProfileSettings from './ProfileSettings'
-import PatientDrawer from '../components/PatientDrawer'
 import PatientWorkspace from './PatientWorkspace'
-import { PatientFormDialog } from '../components/patient-profile/PatientFormDialog'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../components/shadcn/dialog'
 import { useQueueWebSocket } from '../lib/useWebSocket'
-import { Toaster } from '../components/shadcn/toast'
 import { useRealtimeEvents } from '../hooks/useRealtimeEvents'
 import { useUIStore } from '../store/uistore'
-import { playnotificationsound } from '../components/sounds/soundsmanager';
 import ClinicSettings from './ClinicSettings';
-import CallAgent from './CallAgent';
-import { Plus } from 'lucide-react';
-import { CreateBranchModal } from '../components/CreateBranchModal';
+import AIAgent from './AIAgent';
+import Integrations from './Integrations';
+import { BillingPlans } from '../components/settings/BillingPlans';
+import { Bot, Plug, Stethoscope } from 'lucide-react';
 
 /** yyyy-MM-dd in the browser's local timezone (toISOString() would give the UTC date). */
 function localDateKey(date: Date = new Date()) {
@@ -266,178 +260,8 @@ function useCurrentUser() {
   return { user, clinics, loading, error, reloadUser }
 }
 
-function WorkspaceShell({
-  user,
-  clinics,
-  title,
-  nav,
-  children,
-  hasMultiRole,
-  currentView,
-  onSwitchView,
-}: {
-  user: MeDto
-  clinics?: any[]
-  title: string
-  nav: Array<{ label: string; href?: string; onClick?: () => void; icon: ReactNode }>
-  children: ReactNode
-  hasMultiRole?: boolean
-  currentView?: string
-  onSwitchView?: (view: string) => void
-}) {
-  const location = useLocation()
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false)
-  const [isDesktopExpanded, setIsDesktopExpanded] = useState(true)
-  const [isCreateBranchOpen, setIsCreateBranchOpen] = useState(false)
-
-  return (
-    <div className="h-screen overflow-hidden bg-slate-50 text-slate-900 flex">
-      {/* Fixed Hamburger Toggle Button - Mobile Only */}
-      <button 
-        onClick={() => {
-          setIsSidebarOpen(!isSidebarOpen)
-          setIsDesktopExpanded(!isDesktopExpanded)
-        }}
-        className="lg:hidden fixed top-3 left-4 z-50 p-2 text-slate-500 hover:text-slate-900 bg-white rounded-lg hover:bg-slate-100 transition-colors shadow-sm border border-slate-200"
-      >
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-        </svg>
-      </button>
-
-      {/* ── Sidebar ─────────────────────────────────────────── */}
-      <aside 
-        className={`fixed inset-y-0 left-0 z-40 flex flex-col border-r border-slate-200 bg-white transition-all duration-300 ease-in-out transform overflow-hidden ${
-          isSidebarOpen ? 'translate-x-0' : '-translate-x-full'
-        } lg:translate-x-0 ${isDesktopExpanded ? 'w-64' : 'w-64 lg:w-[68px]'}`}
-      >
-          {/* Branding header — add padding-left to clear the hamburger button on mobile */}
-          <div 
-            onClick={() => {
-              setIsSidebarOpen(!isSidebarOpen)
-              setIsDesktopExpanded(!isDesktopExpanded)
-            }}
-            className="flex items-center gap-3 border-b border-slate-100 pl-16 lg:pl-[18px] pr-4 h-[60px] shrink-0 cursor-pointer hover:bg-slate-50 transition-colors"
-          >
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-900 overflow-hidden">
-              <img src="/manageopd_icon.png" alt="ManageOPD" className="w-full h-full object-cover" />
-            </div>
-            <div className={`overflow-hidden whitespace-nowrap transition-opacity duration-300 ${!isDesktopExpanded ? 'lg:opacity-0' : 'opacity-100'}`}>
-              <p className="text-sm font-bold leading-none text-slate-900 truncate">ManageOPD</p>
-              <p className="mt-0.5 text-[10px] font-semibold uppercase tracking-wider text-slate-400 truncate">
-                {title}
-              </p>
-            </div>
-          </div>
-
-          {/* Nav links — grow to fill space */}
-          <nav className="flex-1 space-y-1 overflow-y-auto p-3 overflow-x-hidden">
-            {nav.map((item) => {
-              const isActive = item.href ? location.pathname === item.href : false
-              const content = (
-                <>
-                  <span className={`shrink-0 flex items-center justify-center h-5 w-5 ${isActive ? 'text-slate-700' : 'text-slate-400'}`}>
-                    {item.icon}
-                  </span>
-                  <span className={`whitespace-nowrap transition-opacity duration-300 ${!isDesktopExpanded ? 'lg:opacity-0' : 'opacity-100'}`}>
-                    {item.label}
-                  </span>
-                </>
-              )
-              return item.href ? (
-                <Link
-                  key={item.label}
-                  to={item.href}
-                  className={`flex items-center gap-3 rounded-lg px-2.5 py-2 text-sm font-medium transition-colors ${isActive
-                      ? 'bg-slate-100 text-slate-900'
-                      : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
-                    }`}
-                >
-                  {content}
-                </Link>
-              ) : (
-                <button
-                  key={item.label}
-                  type="button"
-                  onClick={item.onClick}
-                  className="flex w-full items-center gap-3 rounded-lg px-2.5 py-2 text-left text-sm font-medium text-slate-600 transition-colors hover:bg-slate-50 hover:text-slate-900"
-                >
-                  {content}
-                </button>
-              )
-            })}
-          </nav>
-
-          {/* User profile strip — full width, pinned to bottom */}
-          <div className="border-t border-slate-100 shrink-0 w-64">
-            <AccountMenu
-              userName={user.full_name}
-              userEmail={user.email}
-              userRole={user.role}
-              align="top"
-              hasMultiRole={hasMultiRole}
-              currentView={currentView}
-              onSwitchView={onSwitchView}
-              textClassName={`whitespace-nowrap transition-opacity duration-300 ${!isDesktopExpanded ? 'lg:opacity-0' : 'opacity-100'}`}
-            />
-          </div>
-        </aside>
-
-        {/* Overlay for mobile when sidebar is open */}
-        {isSidebarOpen && (
-          <div 
-            className="fixed inset-0 bg-slate-900/20 z-30 lg:hidden backdrop-blur-sm transition-opacity"
-            onClick={() => setIsSidebarOpen(false)}
-          />
-        )}
-
-        {/* ── Main content ─────────────────────────────────────── */}
-        <div className={`flex-1 flex flex-col h-screen min-w-0 transition-all duration-300 ease-in-out ml-0 ${isDesktopExpanded ? 'lg:ml-64' : 'lg:ml-[68px]'}`}>
-          
-          {/* Top Header */}
-          <header className="h-[60px] w-full shrink-0 bg-white border-b border-slate-200 flex items-center justify-end px-4 lg:px-8">
-            {clinics && clinics.length > 0 && (
-              <div className="flex items-center gap-3">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium text-slate-500">Clinic:</span>
-                  <select
-                    className="text-sm border-slate-200 rounded-lg text-slate-900 bg-slate-50 px-3 py-1.5 focus:ring-brand-cyan focus:border-brand-cyan"
-                    value={localStorage.getItem('active_clinic_id') || clinics.find(c => c.is_active)?.id || ''}
-                    onChange={(e) => {
-                      localStorage.setItem('active_clinic_id', e.target.value)
-                      window.location.reload()
-                    }}
-                  >
-                    {clinics.map(c => (
-                      <option key={c.id} value={c.id}>{c.name}</option>
-                    ))}
-                  </select>
-                </div>
-                <button 
-                  onClick={() => setIsCreateBranchOpen(true)}
-                  className="text-sm font-medium text-white bg-brand-navy hover:bg-slate-800 px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1 shadow-sm"
-                >
-                  <Plus className="h-4 w-4" />
-                  Add Center
-                </button>
-              </div>
-            )}
-            <CreateBranchModal 
-              isOpen={isCreateBranchOpen} 
-              onClose={() => setIsCreateBranchOpen(false)} 
-            />
-          </header>
-
-          {/* Header stays fixed; only page content scrolls. */}
-          <main className="flex-1 min-h-0 overflow-y-auto space-y-6 p-4 md:p-6 lg:p-8 lg:pt-6">
-            {children}
-          </main>
-          <Toaster />
-          <PatientDrawer />
-        </div>
-    </div>
-  )
-}
+// The frame around every workspace (sidebar, header, page): see components/layout/AppShell.
+const WorkspaceShell = AppShell
 
 
 function StatPill({ label, value, to }: { label: string; value: string; to?: string }) {
@@ -473,36 +297,24 @@ type InviteDto = {
 
 function AdminConsole({ user, clinics, hasMultiRole, currentView, onSwitchView, reloadUser }: { user: MeDto; clinics?: any[]; hasMultiRole?: boolean; currentView?: string; onSwitchView?: (v: string) => void; reloadUser?: () => Promise<void> }) {
   const [team, setTeam] = useState<TeamSummaryDto | null>(null)
-  const [dashboardStats, setDashboardStats] = useState<any>(null)
   const [invites, setInvites] = useState<InviteDto[]>([])
-  const [, setPatients] = useState<PatientDto[]>([])
   const [subscription, setSubscription] = useState<SubscriptionSummaryDto | null>(null)
-  const [reports, setReports] = useState<{ templates: ReportTemplateDto[]; executions: ReportExecutionDto[] }>({ templates: [], executions: [] })
-  const [inviteEmail, setInviteEmail] = useState('')
-  const [inviteRole, setInviteRole] = useState<'doctor' | 'receptionist'>('doctor')
-  const [upgradePlan, setUpgradePlan] = useState('growth')
   const { addToast } = useUIStore()
 
   const [loading, setLoading] = useState(true)
 
+  // What Settings → Team and Settings → Billing show; every other page loads its own data.
   const load = async () => {
     setLoading(true)
     try {
-      const [teamRes, dashboardRes, subscriptionRes, templatesRes, executionsRes, invitesRes, patientsRes] = await Promise.all([
+      const [teamRes, subscriptionRes, invitesRes] = await Promise.all([
         api.get('/accounts/access/'),
-        api.get('/accounts/dashboard/'),
         api.get('/subscriptions/summary/'),
-        api.get('/reports/templates/'),
-        api.get('/reports/executions/'),
         api.get('/accounts/invites/'),
-        api.get('/patients/', { params: { page_size: 50 } }),
       ])
       setTeam(teamRes.data as TeamSummaryDto)
-      setDashboardStats(dashboardRes.data)
       setInvites(unwrapList<InviteDto>(invitesRes.data))
-      setPatients(unwrapList<PatientDto>(patientsRes.data))
       setSubscription(subscriptionRes.data as SubscriptionSummaryDto)
-      setReports({ templates: unwrapList<ReportTemplateDto>(templatesRes.data), executions: unwrapList<ReportExecutionDto>(executionsRes.data) })
     } catch {
       addToast('Could not load admin data.', 'error')
     } finally {
@@ -514,24 +326,6 @@ function AdminConsole({ user, clinics, hasMultiRole, currentView, onSwitchView, 
     void load()
   }, [])
 
-  useRealtimeEvents((payload) => {
-    if (payload.type.startsWith('appointment.')) {
-      void load()
-    }
-  })
-
-  const sendInvite = async (event: FormEvent) => {
-    event.preventDefault()
-    try {
-      await api.post('/accounts/invites/', { email: inviteEmail, role: inviteRole })
-      setInviteEmail('')
-      addToast('Invitation sent.', 'success')
-      await load()
-    } catch {
-      addToast('Could not send invitation. Check seat limits and email availability.', 'error')
-    }
-  }
-
   const updatePlan = async (plan: string) => {
     try {
       const response = await api.post('/subscriptions/upgrade/', { plan })
@@ -541,7 +335,7 @@ function AdminConsole({ user, clinics, hasMultiRole, currentView, onSwitchView, 
           key: response.data.key_id,
           amount: response.data.amount,
           currency: response.data.currency,
-          name: "ManageOPD",
+          name: "Gunasheela Hospital",
           description: `Upgrade to ${plan} plan`,
           order_id: response.data.razorpay_order_id,
           handler: async function (paymentResponse: any) {
@@ -551,7 +345,6 @@ function AdminConsole({ user, clinics, hasMultiRole, currentView, onSwitchView, 
                 razorpay_order_id: paymentResponse.razorpay_order_id,
                 razorpay_signature: paymentResponse.razorpay_signature
               })
-              setUpgradePlan(plan)
               await load()
               addToast(`Subscription upgraded to ${plan}.`, 'success')
             } catch (err: any) {
@@ -574,7 +367,6 @@ function AdminConsole({ user, clinics, hasMultiRole, currentView, onSwitchView, 
         return;
       }
 
-      setUpgradePlan(plan)
       await load()
       addToast(`Subscription switched to ${plan}.`, 'success')
     } catch (error: any) {
@@ -586,33 +378,21 @@ function AdminConsole({ user, clinics, hasMultiRole, currentView, onSwitchView, 
     }
   }
 
-  const toggleMember = async (member: MeDto) => {
-    const isActive = member.membership_status === 'active' || member.is_active !== false;
-    const endpoint = isActive ? `/auth/users/${member.id}/deactivate/` : `/auth/users/${member.id}/reactivate/`
-    try {
-      await api.post(endpoint)
-      addToast(`${member.full_name} updated.`, 'success')
-      await load()
-    } catch {
-      addToast('Could not update the team member.', 'error')
-    }
-  }
-
   return (
     <WorkspaceShell
       user={user}
       clinics={clinics}
-      title="Admin Console"
+      title="Admin console"
       nav={[
-        { label: 'Dashboard', href: '/app/dashboard', icon: <LayoutDashboard className="h-4 w-4 opacity-70" /> },
-        { label: 'Access', href: '/app/access', icon: <Users className="h-4 w-4 opacity-70" /> },
-        { label: 'Calendar', href: '/app/calendar', icon: <CalendarDays className="h-4 w-4 opacity-70" /> },
-        { label: 'Patients', href: '/app/patients', icon: <ClipboardList className="h-4 w-4 opacity-70" /> },
-        { label: 'Billing and upgrade', href: '/app/billing', icon: <CreditCard className="h-4 w-4 opacity-70" /> },
-        { label: 'Reports', href: '/app/reports', icon: <FileBarChart className="h-4 w-4 opacity-70" /> },
-        { label: 'Settings', href: '/app/settings', icon: <SettingsIcon className="h-4 w-4 opacity-70" /> },
-        { label: 'Call Logs', href: '/app/call-logs', icon: <PhoneCall className="h-4 w-4 opacity-70" /> },
-        { label: 'Test AI Call', href: '/app/call-agent', icon: <PhoneCall className="h-4 w-4 opacity-70" /> },
+        { section: 'Home', label: 'Dashboard', href: '/app/dashboard', icon: <LayoutDashboard className="h-[18px] w-[18px]" /> },
+        { section: 'Operations', label: 'Calendar', href: '/app/calendar', icon: <CalendarDays className="h-[18px] w-[18px]" /> },
+        { section: 'Operations', label: 'Appointments', href: '/app/appointments', icon: <ListTodo className="h-[18px] w-[18px]" /> },
+        { section: 'Operations', label: 'Doctors', href: '/app/doctors', icon: <Stethoscope className="h-[18px] w-[18px]" /> },
+        { section: 'Patients', label: 'Patients', href: '/app/patients', icon: <ClipboardList className="h-[18px] w-[18px]" /> },
+        { section: 'Insights', label: 'Reports', href: '/app/reports', icon: <FileBarChart className="h-[18px] w-[18px]" /> },
+        { section: 'Setup', label: 'AI Agent', href: '/app/ai-agent', icon: <Bot className="h-[18px] w-[18px]" /> },
+        { section: 'Setup', label: 'Integrations', href: '/app/integrations', icon: <Plug className="h-[18px] w-[18px]" /> },
+        { section: 'Setup', label: 'Settings', href: '/app/settings', icon: <SettingsIcon className="h-[18px] w-[18px]" /> },
       ]}
       hasMultiRole={hasMultiRole}
       currentView={currentView}
@@ -620,140 +400,38 @@ function AdminConsole({ user, clinics, hasMultiRole, currentView, onSwitchView, 
     >
       <Routes>
         <Route path="/" element={<Navigate to="dashboard" replace />} />
-        <Route path="settings" element={<ClinicSettings onClinicSaved={reloadUser} />} />
-        {/* Old addresses of the two pages that Settings replaced. */}
+        <Route path="settings" element={
+          <ClinicSettings
+            onClinicSaved={reloadUser}
+            team={<TeamSettings team={team} invites={invites} loading={loading} load={load} user={user} reloadUser={reloadUser} />}
+            billing={<BillingPlans subscription={subscription} onChoosePlan={(plan) => void updatePlan(plan)} />}
+          />
+        } />
+        <Route path="ai-agent" element={<AIAgent />} />
+        <Route path="integrations" element={<Integrations />} />
+        <Route path="reports" element={<Reports />} />
+        <Route path="reports/calls/:id" element={<CallDetail backTo="/app/reports" />} />
+        {/* Old addresses of pages that moved under Settings, AI Agent and Reports. */}
         <Route path="configuration" element={<Navigate to="/app/settings" replace />} />
-        <Route path="ai-settings" element={<Navigate to="/app/settings?tab=ai" replace />} />
-        <Route path="call-agent" element={<CallAgent />} />
-        <Route path="call-logs" element={<CallLogs />} />
+        <Route path="access" element={<Navigate to="/app/settings?tab=team" replace />} />
+        <Route path="billing" element={<Navigate to="/app/settings?tab=billing" replace />} />
+        <Route path="ai-settings" element={<Navigate to="/app/ai-agent" replace />} />
+        <Route path="call-agent" element={<Navigate to="/app/ai-agent?tab=test" replace />} />
+        <Route path="call-logs" element={<Navigate to="/app/reports" replace />} />
 
-        <Route path="dashboard" element={<Dashboard />} />
-        <Route path="access" element={<TeamSettings team={team} invites={invites} loading={loading} load={load} user={user} reloadUser={reloadUser} />} />
+        {/* The admin's dashboard is the front desk's day; numbers and trends live under Reports. */}
+        <Route path="dashboard" element={<FrontDesk userName={user.full_name} callsPath="/app/reports" callDetailPath="/app/reports/calls" />} />
+        <Route path="front-desk" element={<Navigate to="/app/dashboard" replace />} />
 
         <Route path="calendar" element={
           <div className="w-full h-full">
-            <CalendarView showBookButton={false} user={user} fillHeight />
+            <CalendarView user={user} defaultView={Views.DAY} fillHeight />
           </div>
         } />
+        <Route path="appointments" element={<Appointments />} />
+        <Route path="doctors" element={<Doctors />} />
 
-        <Route path="patients" element={<PatientWorkspace />} />
-
-        <Route path="billing" element={
-          <div className="w-full h-full flex flex-col space-y-6">
-            <div className="mb-8">
-              <h3 className="text-xl font-semibold text-slate-950">Billing and upgrade</h3>
-              <p className="text-sm text-slate-500 mb-4">Switch plans and review current seat usage.</p>
-              
-              <div className="inline-flex items-center gap-3 bg-white px-5 py-3 rounded-2xl border border-slate-200 shadow-sm">
-                <span className="text-sm font-medium text-slate-600">Current Plan:</span>
-                <span className="text-sm font-bold text-emerald-600 uppercase tracking-wider px-3 py-1 bg-emerald-50 rounded-full border border-emerald-200">
-                  {subscription?.plan || 'Unknown'}
-                </span>
-              </div>
-              <p className="text-xs text-slate-400 mt-3 ml-2">Trial ends on {formatDate(subscription?.trial_ends_at)}</p>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8 items-stretch flex-1 pt-5 pb-8">
-              {(subscription?.plan_options || []).map((plan) => {
-                const isActive = subscription?.plan === plan.value;
-                return (
-                  <div 
-                    key={plan.value} 
-                    className={`rounded-2xl overflow-visible relative w-full p-6 flex flex-col transition-all duration-300 border-2 ${
-                      isActive 
-                        ? 'border-emerald-400 shadow-[0_0_20px_rgba(16,185,129,0.2)] bg-emerald-50/10' 
-                        : 'border-slate-200 hover:border-slate-300 hover:shadow-md bg-white'
-                    }`}
-                  >
-                    {isActive && (
-                      <div className="absolute -top-4 left-1/2 -translate-x-1/2 bg-gradient-to-r from-emerald-500 to-emerald-400 text-white text-[11px] font-bold px-4 py-1.5 rounded-full uppercase tracking-widest flex items-center gap-2 shadow-lg shadow-emerald-500/30 border border-emerald-400/50">
-                        <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse"></span>
-                        Current Plan
-                      </div>
-                    )}
-                    
-                    <div className="mb-6 mt-2 text-center">
-                      <div className="mx-auto w-12 h-12 bg-slate-100 rounded-2xl flex items-center justify-center mb-4 text-slate-600">
-                        <CreditCard className="w-6 h-6" />
-                      </div>
-                      <h4 className="text-2xl font-bold text-slate-900 capitalize">{plan.label}</h4>
-                      <p className="text-sm text-slate-500 mt-2 min-h-[40px]">
-                        {plan.value === 'trial' ? 'For testing out the platform' : plan.value === 'growth' ? 'For growing clinics' : 'Higher limits, priority access'}
-                      </p>
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={() => void updatePlan(plan.value)}
-                      disabled={isActive}
-                      className={`w-full py-2.5 rounded-xl text-sm font-semibold transition-all mb-6 ${
-                        isActive 
-                          ? 'bg-slate-100 text-slate-400 cursor-not-allowed' 
-                          : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm'
-                      }`}
-                    >
-                      {isActive ? 'Active' : `Get ${plan.label}`}
-                    </button>
-                    
-                    <div className="mt-auto pt-5 border-t border-slate-100/80 flex-1">
-                      <p className="text-xs font-semibold text-slate-900 uppercase tracking-wider mb-3">Includes:</p>
-                      <ul className="space-y-3">
-                        {plan.value === 'trial' && (
-                          <>
-                            <li className="flex items-start gap-2 text-sm font-medium text-slate-600">
-                              <Sparkles className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
-                              14-day full access
-                            </li>
-                            <li className="flex items-start gap-2 text-sm font-medium text-slate-600">
-                              <Sparkles className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
-                              Basic AI features
-                            </li>
-                          </>
-                        )}
-                        {plan.value === 'growth' && (
-                          <>
-                            <li className="flex items-start gap-2 text-sm font-medium text-slate-600">
-                              <Sparkles className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
-                              Unlimited appointments
-                            </li>
-                            <li className="flex items-start gap-2 text-sm font-medium text-slate-600">
-                              <Sparkles className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
-                              Priority email support
-                            </li>
-                            <li className="flex items-start gap-2 text-sm font-medium text-slate-600">
-                              <Sparkles className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
-                              Standard AI limits
-                            </li>
-                          </>
-                        )}
-                        {plan.value === 'enterprise' && (
-                          <>
-                            <li className="flex items-start gap-2 text-sm font-medium text-slate-600">
-                              <Sparkles className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
-                              Everything in Growth
-                            </li>
-                            <li className="flex items-start gap-2 text-sm font-medium text-slate-600">
-                              <Sparkles className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
-                              Custom AI models
-                            </li>
-                            <li className="flex items-start gap-2 text-sm font-medium text-slate-600">
-                              <Sparkles className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
-                              24/7 Phone support
-                            </li>
-                            <li className="flex items-start gap-2 text-sm font-medium text-slate-600">
-                              <Sparkles className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
-                              Advanced analytics
-                            </li>
-                          </>
-                        )}
-                      </ul>
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-        } />
+        <Route path="patients" element={<PatientWorkspace callDetailPath="/app/reports/calls" />} />
 
         <Route path="profile" element={
           <ProfileSettings user={user} reloadUser={reloadUser} />
@@ -766,68 +444,22 @@ function AdminConsole({ user, clinics, hasMultiRole, currentView, onSwitchView, 
 function ReceptionDesk({ user, clinics, hasMultiRole, currentView, onSwitchView, reloadUser }: { user: MeDto; clinics?: any[]; hasMultiRole?: boolean; currentView?: string; onSwitchView?: (v: string) => void; reloadUser?: () => Promise<void> }) {
   const [patients, setPatients] = useState<PatientDto[]>([])
   const [doctors, setDoctors] = useState<DoctorDto[]>([])
-  const [appointments, setAppointments] = useState<AppointmentDto[]>([])
-  const [queue, setQueue] = useState<QueueTokenDto[]>([])
   const [followups, setFollowups] = useState<FollowUpDto[]>([])
-  const [booking, setBooking] = useState({ patient: '', doctor: '', starts_at: '', ends_at: '', reason: 'Consultation' })
-  const [isBookingModalOpen, setIsBookingModalOpen] = useState(false)
-  const [bookingDate, setBookingDate] = useState<string>(localDateKey())
-  const [bookingPage, setBookingPage] = useState(1)
-  const [bookingTotalPages, setBookingTotalPages] = useState(1)
   const [followupDraft, setFollowupDraft] = useState({ patient: '', doctor: '', scheduled_for: '', method: 'phone', notes: '' })
-  const plan = user.clinic_plan || 'trial'
   const { refreshTick, addToast } = useUIStore()
 
-  const loadAppointments = async () => {
-    try {
-      const starts_at_after = bookingDate ? `${bookingDate}T00:00:00.000Z` : undefined
-      const starts_at_before = bookingDate ? `${bookingDate}T23:59:59.999Z` : undefined
-      const res = await api.get('/appointments/', {
-        params: {
-          starts_at_after,
-          starts_at_before,
-          page: bookingPage,
-          page_size: 10,
-          _t: Date.now()
-        }
-      })
-      setAppointments(unwrapList<AppointmentDto>(res.data))
-      if (res.data?.count) {
-        setBookingTotalPages(Math.ceil(res.data.count / 10))
-      } else {
-        setBookingTotalPages(1)
-      }
-    } catch (err) {
-      console.error('Failed to load appointments', err)
-    }
-  }
-
-  useEffect(() => {
-    void loadAppointments()
-  }, [bookingDate, bookingPage, refreshTick])
-
+  // What the Follow-ups page needs; the other pages load their own data.
   const load = async () => {
     try {
-      console.log('ReceptionDesk load() started')
-      const today = localDateKey()
       const t = Date.now()
-      const [patientsRes, doctorsRes, queueRes, followupsRes] = await Promise.all([
+      const [patientsRes, doctorsRes, followupsRes] = await Promise.all([
         api.get('/patients/', { params: { page_size: 50, _t: t } }),
         api.get('/doctors/', { params: { page_size: 50, _t: t } }),
-        api.get('/queue/', { params: { service_date: today, page_size: 50, _t: t } }),
         api.get('/followups/followups/', { params: { page_size: 50, _t: t } }),
       ])
       setPatients(unwrapList<PatientDto>(patientsRes.data))
       setDoctors(unwrapList<DoctorDto>(doctorsRes.data))
-      setQueue(unwrapList<QueueTokenDto>(queueRes.data))
       setFollowups(unwrapList<FollowUpDto>(followupsRes.data))
-      if (!booking.doctor && unwrapList<DoctorDto>(doctorsRes.data)[0]) {
-        setBooking((current) => ({ ...current, doctor: String(unwrapList<DoctorDto>(doctorsRes.data)[0].id) }))
-      }
-      if (!booking.patient && unwrapList<PatientDto>(patientsRes.data)[0]) {
-        setBooking((current) => ({ ...current, patient: String(unwrapList<PatientDto>(patientsRes.data)[0].id) }))
-      }
-      console.log('ReceptionDesk load() finished successfully', { patients: patientsRes.data, doctors: doctorsRes.data })
     } catch (err) {
       console.error('ReceptionDesk load() failed', err)
       addToast('Could not load reception data.', 'error')
@@ -844,55 +476,6 @@ function ReceptionDesk({ user, clinics, hasMultiRole, currentView, onSwitchView,
   const now = new Date()
   now.setMinutes(now.getMinutes() - now.getTimezoneOffset())
   const minDateTime = now.toISOString().slice(0, 16)
-
-  const createBooking = async (event: FormEvent) => {
-    event.preventDefault()
-    try {
-      await api.post('/appointments/', {
-        patient: Number(booking.patient),
-        doctor: Number(booking.doctor),
-        starts_at: booking.starts_at ? new Date(booking.starts_at).toISOString() : '',
-        ends_at: booking.ends_at ? new Date(booking.ends_at).toISOString() : '',
-        reason: booking.reason,
-        source: 'front_desk',
-      })
-      addToast('Appointment booked.', 'success')
-      playnotificationsound();
-      await load()
-      setIsBookingModalOpen(false)
-    } catch (error: any) {
-      if (error.response?.data?.non_field_errors) {
-        addToast(`Booking failed: ${error.response.data.non_field_errors.join(' ')}`, 'error')
-      } else {
-        addToast('Could not book the appointment.', 'error')
-      }
-    }
-  }
-
-  const cancelAppointment = async (id: number) => {
-    try {
-      await api.patch(`/appointments/${id}/`, { status: 'cancelled' })
-      addToast('Appointment cancelled.', 'info')
-      playnotificationsound();
-      await load()
-    } catch {
-      addToast('Could not cancel the appointment.', 'error')
-    }
-  }
-
-  const checkInAppointment = async (id: number) => {
-    try {
-      await api.post(`/appointments/${id}/check_in/`)
-      addToast('Appointment checked in.', 'success')
-      await load()
-    } catch (error: any) {
-      if (error.response?.data?.detail) {
-        addToast(`Check-in failed: ${error.response.data.detail}`, 'error')
-      } else {
-        addToast('Could not check in the appointment.', 'error')
-      }
-    }
-  }
 
   const createFollowUp = async (event: FormEvent) => {
     event.preventDefault()
@@ -915,84 +498,18 @@ function ReceptionDesk({ user, clinics, hasMultiRole, currentView, onSwitchView,
     }
   }
 
-  const checkInNext = async () => {
-    const nextWaiting = queue.find((item) => item.status === 'waiting')
-    if (!nextWaiting) {
-      addToast('No waiting token found.', 'info')
-      return
-    }
-    try {
-      await api.post(`/queue/${nextWaiting.id}/check_in/`)
-      addToast(`Token ${nextWaiting.token_number} checked in.`, 'success')
-      await load()
-    } catch {
-      addToast('Could not check in the token.', 'error')
-    }
-  }
-
-  const callNext = async () => {
-    const firstDoctor = doctors[0]
-    if (!firstDoctor) {
-      addToast('Load doctors before calling the queue.', 'warning')
-      return
-    }
-    try {
-      await api.post('/queue/call_next/', { doctor: firstDoctor.id, service_date: new Date().toISOString().slice(0, 10) })
-      addToast(`Called next patient for Dr. ${firstDoctor.full_name}.`, 'success')
-      await load()
-    } catch {
-      addToast('Could not call the next token.', 'error')
-    }
-  }
-
-  const [newPatientDraft, setNewPatientDraft] = useState({ full_name: '', preferred_language: 'English', phone_number: '' })
-  const [phoneDialCode, setPhoneDialCode] = useState('+91')
-  
-  const [isAddingNewPatient, setIsAddingNewPatient] = useState(false)
-
-  const _createPatient = async (event: React.SyntheticEvent, onSuccess?: (patient: PatientDto) => void) => {
-    event.preventDefault()
-    
-    try {
-      const res = await api.post('/patients/', { ...newPatientDraft, phone: `${phoneDialCode}${newPatientDraft.phone_number}` })
-      addToast('Patient created successfully.', 'success')
-      setNewPatientDraft({ full_name: '', preferred_language: 'English', phone_number: '' })
-      setPhoneDialCode('+91')
-      await load()
-      if (onSuccess) {
-        onSuccess(res.data)
-      }
-    } catch (error: any) {
-      if (!error.response || error.response.status >= 500) {
-        addToast("Sorry, couldn't create patient, try again after sometime.", "error")
-      } else if (error.response.status === 400) {
-        const data = error.response.data
-        if (data?.phone) {
-          addToast("Invalid phone number. Please check the format.", "error")
-          // } else if (data?.abha_number) {
-          //   setPatientError("Invalid ABHA number. Please ensure it is correct.")
-        } else if (data?.full_name) {
-          addToast("Please provide a valid full name.", "error")
-        } else {
-          addToast("Please check the provided details and try again.", "error")
-        }
-      } else {
-        addToast("Sorry, couldn't create patient, try again after sometime.", "error")
-      }
-    }
-  }
-
   return (
     <WorkspaceShell
       user={user}
       clinics={clinics}
-      title="Reception Desk"
+      title="Reception desk"
       nav={[
-        { label: 'Dashboard', href: '/app/dashboard', icon: <LayoutDashboard className="h-4 w-4 opacity-70" /> },
-        { label: 'Patient directory', href: '/app/patients', icon: <ClipboardList className="h-4 w-4 opacity-70" /> },
-        { label: 'Booking', href: '/app/booking', icon: <CalendarDays className="h-4 w-4 opacity-70" /> },
-        { label: 'Follow-ups', href: '/app/followups', icon: <FileBarChart className="h-4 w-4 opacity-70" /> },
-        ...(plan === 'growth' ? [{ label: 'Call logs', href: '/app/calls', icon: <PhoneCall className="h-4 w-4 opacity-70" /> }] : []),
+        { section: 'Home', label: 'Dashboard', href: '/app/dashboard', icon: <LayoutDashboard className="h-[18px] w-[18px]" /> },
+        { section: 'Operations', label: 'Calendar', href: '/app/calendar', icon: <CalendarDays className="h-[18px] w-[18px]" /> },
+        { section: 'Operations', label: 'Appointments', href: '/app/appointments', icon: <ListTodo className="h-[18px] w-[18px]" /> },
+        { section: 'Operations', label: 'Follow-ups', href: '/app/followups', icon: <FileBarChart className="h-[18px] w-[18px]" /> },
+        { section: 'Patients', label: 'Patient directory', href: '/app/patients', icon: <ClipboardList className="h-[18px] w-[18px]" /> },
+        { section: 'Insights', label: 'Call logs', href: '/app/calls', icon: <PhoneCall className="h-[18px] w-[18px]" /> },
       ]}
       hasMultiRole={hasMultiRole}
       currentView={currentView}
@@ -1002,165 +519,20 @@ function ReceptionDesk({ user, clinics, hasMultiRole, currentView, onSwitchView,
       <Routes>
         <Route path="/" element={<Navigate to="dashboard" replace />} />
         
-        <Route path="dashboard" element={<ReceptionistDashboard />} />
+        <Route path="dashboard" element={<FrontDesk userName={user.full_name} callsPath="/app/calls" callDetailPath="/app/calls" />} />
         
-        {plan === 'growth' && (
-          <Route path="calls" element={
-            <div className="max-w-6xl">
-              <CallLogs />
-            </div>
-          } />
-        )}
+        <Route path="calls" element={<CallLogs detailPath="/app/calls" />} />
+        <Route path="calls/:id" element={<CallDetail backTo="/app/calls" />} />
 
-        <Route path="patients" element={<PatientWorkspace />} />
-        <Route path="booking" element={
-          <div className="w-full">
-            <div className="space-y-6">
-              <Card className="p-5 space-y-4">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-lg font-semibold text-slate-950">Upcoming Bookings</h3>
-                  <div className="flex items-center gap-3">
-                    <Input 
-                      type="date" 
-                      value={bookingDate} 
-                      onChange={(e) => {
-                        setBookingDate(e.target.value)
-                        setBookingPage(1)
-                      }} 
-                      className="h-9 w-40 text-sm" 
-                    />
-                    <Button variant="secondary" size="sm" onClick={() => { void load(); void loadAppointments(); }}>Refresh</Button>
-                    <Button variant="default" size="sm" onClick={() => setIsBookingModalOpen(true)}>Add Booking</Button>
-                  </div>
-                </div>
-                <div className="overflow-hidden rounded-xl border border-slate-200">
-                  <table className="w-full text-left text-sm">
-                    <thead className="bg-slate-50 text-slate-600">
-                      <tr>
-                        <th className="px-4 py-3 font-medium">Time</th>
-                        <th className="px-4 py-3 font-medium">Patient</th>
-                        <th className="px-4 py-3 font-medium">Doctor</th>
-                        <th className="px-4 py-3 font-medium">Reason</th>
-                        <th className="px-4 py-3 font-medium">Booked by</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100 bg-white">
-                      {appointments.length === 0 ? (
-                        <tr>
-                          <td colSpan={5} className="px-4 py-6 text-center text-slate-500">
-                            No upcoming bookings.
-                          </td>
-                        </tr>
-                      ) : (
-                        appointments.map((appt) => {
-                          // The patient list is only partly loaded, so the name comes with the appointment.
-                          const patient = appt.patient_name || patientOptions.find(p => p.value === String(appt.patient))?.label || `Patient #${appt.patient}`
-                          const doctor = doctorOptions.find(d => d.value === String(appt.doctor))?.label || `Doctor #${appt.doctor}`
-                          return (
-                            <tr key={appt.id}>
-                              <td className="px-4 py-3 text-slate-900 font-medium whitespace-nowrap">
-                                {new Date(appt.starts_at).toLocaleDateString()} {new Date(appt.starts_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                              </td>
-                              <td className="px-4 py-3 text-slate-600">{patient}</td>
-                              <td className="px-4 py-3 text-slate-600">{doctor}</td>
-                              <td className="px-4 py-3 text-slate-500">{appt.reason || '-'}</td>
-                              <td className="px-4 py-3">
-                                {/* "phone" is set by the AI receptionist's booking tool; everything else is booked by staff. */}
-                                {appt.source === 'phone' ? <Badge variant="purple">AI agent</Badge> : <Badge variant="muted">Receptionist</Badge>}
-                              </td>
-                            </tr>
-                          )
-                        })
-                      )}
-                    </tbody>
-                  </table>
-                  <div className="flex items-center justify-between px-4 py-3 bg-slate-50 border-t border-slate-200">
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
-                      disabled={bookingPage <= 1} 
-                      onClick={() => setBookingPage(p => p - 1)}
-                    >
-                      Previous
-                    </Button>
-                    <span className="text-sm font-medium text-slate-600">
-                      Page {bookingPage} of {bookingTotalPages}
-                    </span>
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
-                      disabled={bookingPage >= bookingTotalPages} 
-                      onClick={() => setBookingPage(p => p + 1)}
-                    >
-                      Next
-                    </Button>
-                  </div>
-                </div>
-              </Card>
-            </div>
-            
-            <Dialog open={isBookingModalOpen} onOpenChange={setIsBookingModalOpen}>
-              <DialogContent className="sm:max-w-[425px]">
-                <DialogHeader>
-                  <DialogTitle>New Booking</DialogTitle>
-                </DialogHeader>
-                <form className="space-y-4 pt-4" onSubmit={createBooking}>
-                  <PatientFormDialog 
-                    isOpen={isAddingNewPatient} 
-                    onOpenChange={(open) => {
-                      setIsAddingNewPatient(open)
-                      if (!open && booking.patient === 'ADD_NEW') {
-                        setBooking(current => ({ ...current, patient: '' }))
-                      }
-                    }} 
-                    onSuccess={async (patientId) => {
-                      await load() // refresh patient list
-                      setBooking(current => ({ ...current, patient: String(patientId) }))
-                    }} 
-                  />
-                  <Select value={booking.patient} onValueChange={(val) => {
-                    if (val === 'ADD_NEW') {
-                      setIsAddingNewPatient(true)
-                      setBooking((current) => ({ ...current, patient: '' }))
-                    } else {
-                      setBooking((current) => ({ ...current, patient: val }))
-                    }
-                  }} required>
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Select a patient">
-                        {booking.patient === 'ADD_NEW' ? '+ Add New Patient' : patientOptions.find(p => p.value === booking.patient)?.label}
-                      </SelectValue>
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="ADD_NEW" className="font-semibold text-emerald-600">+ Add New Patient</SelectItem>
-                      {patientOptions.map((option) => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                  <Select value={booking.doctor} onValueChange={(val) => setBooking((current) => ({ ...current, doctor: val || '' }))} required>
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Select a doctor">
-                        {doctorOptions.find(d => d.value === booking.doctor)?.label}
-                      </SelectValue>
-                    </SelectTrigger>
-                    <SelectContent>
-                      {doctorOptions.map((option) => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                  <Label className="block">
-                    <span className="text-sm text-slate-600 font-medium mb-1 block">Start Time</span>
-                    <DateTimePickerAmPm min={minDateTime} value={booking.starts_at} onChange={(val) => setBooking((current) => ({ ...current, starts_at: val }))} required />
-                  </Label>
-                  <Label className="block">
-                    <span className="text-sm text-slate-600 font-medium mb-1 block">End Time</span>
-                    <DateTimePickerAmPm min={booking.starts_at || minDateTime} value={booking.ends_at} onChange={(val) => setBooking((current) => ({ ...current, ends_at: val }))} required />
-                  </Label>
-                  <Input className="w-full" value={booking.reason} onChange={(event) => setBooking((current) => ({ ...current, reason: event.target.value }))} placeholder="Reason for visit" />
-                  <Button variant="default" type="submit" className="w-full justify-center mt-2" disabled={!booking.patient || !booking.doctor}>Book appointment</Button>
-                </form>
-              </DialogContent>
-            </Dialog>
+        <Route path="patients" element={<PatientWorkspace callDetailPath="/app/calls" />} />
+        <Route path="calendar" element={
+          <div className="w-full h-full">
+            <CalendarView user={user} defaultView={Views.DAY} fillHeight />
           </div>
         } />
+        <Route path="appointments" element={<Appointments />} />
+        {/* The old booking page: bookings are now made on the Calendar and listed under Appointments. */}
+        <Route path="booking" element={<Navigate to="/app/appointments" replace />} />
 
         <Route path="followups" element={
           <div className="grid gap-6 xl:grid-cols-[1.5fr_1fr]">
@@ -1232,117 +604,6 @@ function ReceptionDesk({ user, clinics, hasMultiRole, currentView, onSwitchView,
                   <textarea className="min-h-24 w-full rounded-xl border border-slate-300 px-3 py-2" value={followupDraft.notes} onChange={(event) => setFollowupDraft((current) => ({ ...current, notes: event.target.value }))} placeholder="Communication notes" />
                   <Button variant="default" type="submit" className="w-full justify-center" disabled={!followupDraft.patient || !followupDraft.doctor}>Create follow-up</Button>
                 </form>
-              </Card>
-            </div>
-          </div>
-        } />
-
-        <Route path="queue" element={
-          <div className="grid gap-6 xl:grid-cols-[1.25fr_0.95fr]">
-            <div className="space-y-6">
-              <Card className="space-y-4 p-5" id="queue">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h3 className="text-lg font-semibold text-slate-950">Live queue</h3>
-                    <p className="text-sm text-slate-500">Check-in and call-next actions hit queue endpoints directly.</p>
-                  </div>
-                  <Button variant="secondary" size="sm" onClick={() => void load()}>Refresh</Button>
-                </div>
-                <div className="space-y-3">
-                  {(queue || []).filter(t => t.status !== 'completed' && t.status !== 'skipped').slice(0, 6).map((token) => (
-                    <div key={token.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                      <div className="flex items-center justify-between gap-3">
-                        <div>
-                          <p className="font-semibold text-slate-950">Token {token.token_number}</p>
-                          <p className="text-sm text-slate-500">{token.status} · {formatDate(token.service_date)}</p>
-                        </div>
-                        <Button size="sm" variant="secondary" onClick={async () => {
-                          try {
-                            await api.post(`/queue/${token.id}/check_in/`)
-                            addToast(`Token ${token.token_number} checked in.`, 'success')
-                            await load()
-                          } catch {
-                            addToast('Could not check in that token.', 'error')
-                          }
-                        }}>Check in</Button>
-                      </div>
-                    </div>
-                  ))}
-                  {queue.filter(t => t.status !== 'completed' && t.status !== 'skipped').length === 0 && <p className="text-sm text-slate-500">The queue is currently empty.</p>}
-                </div>
-                <Button variant="secondary" className="w-full justify-center" onClick={() => void checkInNext()}>
-                  Check in next waiting
-                </Button>
-                <Button variant="default" className="w-full justify-center" onClick={() => void callNext()}>
-                  Call next
-                </Button>
-              </Card>
-
-              <Card className="space-y-4 p-5 h-fit">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h3 className="text-lg font-semibold text-slate-950">Recently Completed</h3>
-                    <p className="text-sm text-slate-500">Completed consultations with doctor notes.</p>
-                  </div>
-                </div>
-                <div className="space-y-3">
-                  {(queue || []).filter(t => t.status === 'completed').slice(0, 5).map((token) => (
-                    <div key={token.id} className="rounded-2xl border border-slate-200 bg-white p-4 opacity-75">
-                      <div className="flex items-center justify-between gap-3">
-                        <div className="w-full">
-                          <p className="font-semibold text-slate-500 line-through">Token {token.token_number} - {token.patient_name || 'Patient ' + token.patient}</p>
-                          <p className="text-sm text-emerald-600 font-medium">✓ Completed</p>
-                          {token.notes && <p className="text-sm text-slate-600 mt-2 bg-slate-50 p-2 rounded-lg border border-slate-100 italic">{token.notes}</p>}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                  {queue.filter(t => t.status === 'completed').length === 0 && (
-                    <p className="text-sm text-slate-500 p-4 bg-slate-50 rounded-xl border border-dashed border-slate-200 text-center">
-                      No recently completed patients.
-                    </p>
-                  )}
-                </div>
-              </Card>
-            </div>
-            <div className="space-y-6">
-              <Card className="space-y-4 p-5">
-                <h3 className="text-lg font-semibold text-slate-950">Today’s appointments</h3>
-                <div className="space-y-3">
-                  {(appointments || []).filter(a => a.status === 'scheduled' && isToday(a.starts_at)).slice(0, 6).map((appointment) => (
-                    <div key={appointment.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <p className="font-semibold text-slate-950">{appointment.reason}</p>
-                          <p className="text-sm text-slate-500">{formatDateTime(appointment.starts_at)} · {appointment.status}</p>
-                        </div>
-                        <div className="flex flex-col gap-2">
-                          {appointment.status === 'scheduled' && (
-                            <Button variant="default" size="sm" onClick={() => void checkInAppointment(appointment.id)}>Check In</Button>
-                          )}
-                          {appointment.status !== 'cancelled' && (
-                            <Button variant="secondary" size="sm" onClick={() => void cancelAppointment(appointment.id)}>Cancel</Button>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                  {appointments.length === 0 && <p className="text-sm text-slate-500">No appointments today.</p>}
-                </div>
-              </Card>
-
-              <Card className="space-y-4 p-5">
-                <h3 className="text-lg font-semibold text-slate-950">Recent follow-ups</h3>
-                <div className="space-y-3">
-                  {(followups || []).slice(0, 5).map((followup) => (
-                    <div key={followup.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                      <p className="font-semibold text-slate-950">{followup.method} · {followup.status}</p>
-                      <p className="text-sm text-slate-500">{formatDateTime(followup.scheduled_for)}</p>
-                      <p className="mt-2 text-sm text-slate-600">{followup.notes || 'No notes yet.'}</p>
-                    </div>
-                  ))}
-                  {followups.length === 0 && <p className="text-sm text-slate-500">No recent follow-ups.</p>}
-                </div>
               </Card>
             </div>
           </div>
@@ -1537,14 +798,14 @@ function DoctorWorkspace({ user, clinics, hasMultiRole, currentView, onSwitchVie
     <WorkspaceShell
       user={user}
       clinics={clinics}
-      title="Doctor Workspace"
+      title="Doctor workspace"
       nav={[
-        { label: 'Dashboard', href: '/app/dashboard', icon: <LayoutDashboard className="h-4 w-4 opacity-70" /> },
-        { label: 'Calendar', href: '/app/calendar', icon: <CalendarDays className="h-4 w-4 opacity-70" /> },
-        { label: 'Personal queue', href: '/app/queue', icon: <ListTodo className="h-4 w-4 opacity-70" /> },
-        { label: 'Patient chart', href: '/app/patients', icon: <ClipboardList className="h-4 w-4 opacity-70" /> },
-        { label: 'AI summaries', href: '/app/ai', icon: <Sparkles className="h-4 w-4 opacity-70" /> },
-        { label: 'Settings', href: '/app/settings', icon: <SettingsIcon className="h-4 w-4 opacity-70" /> },
+        { section: 'Home', label: 'Dashboard', href: '/app/dashboard', icon: <LayoutDashboard className="h-[18px] w-[18px]" /> },
+        { section: 'My day', label: 'Calendar', href: '/app/calendar', icon: <CalendarDays className="h-[18px] w-[18px]" /> },
+        { section: 'My day', label: 'Personal queue', href: '/app/queue', icon: <ListTodo className="h-[18px] w-[18px]" /> },
+        { section: 'Patients', label: 'Patient chart', href: '/app/patients', icon: <ClipboardList className="h-[18px] w-[18px]" /> },
+        { section: 'Patients', label: 'AI summaries', href: '/app/ai', icon: <Sparkles className="h-[18px] w-[18px]" /> },
+        { section: 'Setup', label: 'Settings', href: '/app/settings', icon: <SettingsIcon className="h-[18px] w-[18px]" /> },
       ]}
       hasMultiRole={hasMultiRole}
       currentView={currentView}
@@ -1587,7 +848,6 @@ function DoctorWorkspace({ user, clinics, hasMultiRole, currentView, onSwitchVie
           <div className="w-full h-full">
             <CalendarView
               fillHeight
-              showBookButton={false}
               user={{ ...user, role: 'doctor' }}
               doctorIdProp={user.doctor_profile_id ?? undefined}
               hideDoctorSelect={true}
@@ -1883,8 +1143,10 @@ export default function WorkspaceRouter() {
     )
   }
 
-  const hasMultiRole = (user.role === 'clinic_admin' && user.is_doctor) || (user.role === 'doctor' && user.is_clinic_admin)
-  const currentView = activeView || user.role
+  // Admins can look at the hospital the way the front desk sees it (Reception desk) and switch back.
+  // Doctors have their own login and workspace; it is never reached by switching from another role.
+  const hasMultiRole = user.role === 'clinic_admin'
+  const currentView = user.role === 'clinic_admin' && activeView === 'receptionist' ? 'receptionist' : user.role
 
   const workspaceProps = {
     user,
@@ -1900,7 +1162,7 @@ export default function WorkspaceRouter() {
   }
 
   if (currentView === 'doctor') {
-    return <DoctorWorkspace {...workspaceProps} />
+    return <DoctorWorkspace {...workspaceProps} hasMultiRole={false} />
   }
 
   return <ReceptionDesk {...workspaceProps} />

@@ -20,7 +20,6 @@ import {
 import { enIN } from 'date-fns/locale'
 import 'react-big-calendar/lib/css/react-big-calendar.css'
 import 'react-big-calendar/lib/addons/dragAndDrop/styles.css'
-import { useNavigate } from 'react-router-dom'
 import {
   ArrowRight,
   CalendarClock,
@@ -29,7 +28,6 @@ import {
   ChevronRight,
   CircleCheck,
   CircleX,
-  Pencil,
   Plus,
   RefreshCw,
   UserCheck,
@@ -59,6 +57,8 @@ import {
 } from './shadcn/alert-dialog'
 import { toast } from './shadcn/toast'
 import { PatientFormDialog } from './patient-profile/PatientFormDialog'
+import { BookAppointmentDialog } from './appointments/BookAppointmentDialog'
+import { AppointmentDialog } from './appointments/AppointmentDialog'
 
 export type AppointmentDto = {
   id: number
@@ -388,7 +388,6 @@ const PatientCombobox = ({ patientsList, value, onChange, onAddNew }: { patients
 }
 
 export function CalendarView({
-  showBookButton = false,
   user,
   doctorIdProp,
   hideDoctorSelect = false,
@@ -401,7 +400,6 @@ export function CalendarView({
   customSubtitle,
   fillHeight = false
 }: {
-  showBookButton?: boolean,
   user?: { role: string, doctor_profile_id?: number | null },
   doctorIdProp?: string | number,
   hideDoctorSelect?: boolean,
@@ -415,7 +413,6 @@ export function CalendarView({
   /** Fill the parent's height: the page stays still and only the calendar grid scrolls. */
   fillHeight?: boolean
 }) {
-  const navigate = useNavigate()
   const [appointments, setAppointments] = useState<AppointmentDto[]>([])
   const [loading, setLoading] = useState(false)
   const [view, setView] = useState<View>(defaultView)
@@ -485,28 +482,9 @@ export function CalendarView({
   const [suggestedShifts, setSuggestedShifts] = useState<any[] | null>(null)
   const [submittingWalkin, setSubmittingWalkin] = useState(false)
 
-  const [showEditModal, setShowEditModal] = useState(false)
-  const [editEvent, setEditEvent] = useState<CalendarEvent | null>(null)
-  const [editForm, setEditForm] = useState({ status: 'scheduled' })
-  const [submittingEdit, setSubmittingEdit] = useState(false)
-  const [patientToEdit, setPatientToEdit] = useState<any>(null)
-  const [showPatientEditor, setShowPatientEditor] = useState(false)
-  const [loadingPatient, setLoadingPatient] = useState(false)
-
-  const handleEditPatient = async (patientId: number) => {
-    setLoadingPatient(true)
-    try {
-      const res = await api.get(`/patients/${patientId}/`)
-      setShowEditModal(false)
-      setPatientToEdit(res.data)
-      setShowPatientEditor(true)
-    } catch (err) {
-      console.error('Failed to load patient', err)
-      setErrorAlert('Could not load this patient\'s details.')
-    } finally {
-      setLoadingPatient(false)
-    }
-  }
+  // Booking: the slot that was clicked (or none, from the button) and the appointment opened.
+  const [booking, setBooking] = useState<{ start?: Date; doctorId?: number | string } | null>(null)
+  const [openAppointment, setOpenAppointment] = useState<AppointmentDto | null>(null)
 
   useEffect(() => {
     if (!isDoctor) {
@@ -868,17 +846,21 @@ export function CalendarView({
                 )}
                 {!isDoctor && (
                   <Button
-                    variant={showBookButton ? 'outline' : 'default'}
+                    variant="outline"
                     className="h-11 rounded-full px-5"
                     onClick={() => void handleOpenWalkinModal(new Date())}
                   >
-                    <Plus />
                     Walk-in
                   </Button>
                 )}
-                {!isDoctor && showBookButton && (
-                  <Button variant="default" className="h-11 rounded-full px-5" onClick={() => navigate(`/app/booking?date=${format(date, 'yyyy-MM-dd')}`)}>
-                    Book Appointment
+                {!isDoctor && (
+                  <Button
+                    variant="default"
+                    className="h-11 rounded-full px-5"
+                    onClick={() => setBooking({ doctorId: selectedDoctorId !== 'all' ? selectedDoctorId : undefined })}
+                  >
+                    <Plus />
+                    Book appointment
                   </Button>
                 )}
               </div>
@@ -925,18 +907,29 @@ export function CalendarView({
                 selectable={!isDoctor}
                 dayLayoutAlgorithm={'no-overlap'}
                 onSelectSlot={(slotInfo: any) => {
-                  if (!isDoctor && (slotInfo.action === 'click' || slotInfo.action === 'select')) {
-                    void handleOpenWalkinModal(slotInfo.start)
+                  if (isDoctor || !(slotInfo.action === 'click' || slotInfo.action === 'select')) return
+                  // A day cell in month view has no time yet: open that day instead of booking midnight.
+                  if (view === Views.MONTH) {
+                    setDate(slotInfo.start)
+                    setView(Views.DAY)
+                    return
                   }
+                  if (slotInfo.start < new Date()) {
+                    toast.add({ title: 'Pick a time that hasn\'t passed yet.', type: 'info' })
+                    return
+                  }
+                  // In the day view each doctor has a column, so the clicked column is the doctor.
+                  setBooking({
+                    start: slotInfo.start,
+                    doctorId: slotInfo.resourceId ?? (selectedDoctorId !== 'all' ? selectedDoctorId : undefined),
+                  })
                 }}
                 onSelectEvent={(event: CalendarEvent) => {
                   if (view === Views.MONTH && event.resource?.isAggregate) {
                     setDate(event.resource.date)
                     setView(Views.DAY)
                   } else if (view !== Views.MONTH && !event.resource?.isAggregate) {
-                    setEditEvent(event)
-                    setEditForm({ status: event.resource.status })
-                    setShowEditModal(true)
+                    setOpenAppointment(event.resource)
                   }
                 }}
                 view={view}
@@ -1121,76 +1114,22 @@ export function CalendarView({
         </DialogContent>
       </Dialog>
 
-      <Dialog open={showEditModal} onOpenChange={setShowEditModal}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle>Update Appointment</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 pt-2">
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <p className="truncate text-sm font-medium text-slate-900">{editEvent?.title}</p>
-                <p className="truncate text-xs text-slate-500">{editEvent?.resource?.reason}</p>
-              </div>
-              {!isDoctor && editEvent && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="shrink-0"
-                  disabled={loadingPatient}
-                  onClick={() => void handleEditPatient(editEvent.resource.patient)}
-                >
-                  <Pencil />
-                  {loadingPatient ? 'Loading...' : 'Edit patient'}
-                </Button>
-              )}
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-700 mb-1">Status</label>
-              <select
-                value={editForm.status}
-                onChange={e => setEditForm({ status: e.target.value })}
-                className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm bg-white"
-              >
-                <option value="scheduled">Scheduled</option>
-                <option value="checked_in">Checked In</option>
-                <option value="needs_reschedule">Needs Reschedule</option>
-                <option value="completed">Completed</option>
-                <option value="no_show">No Show</option>
-                <option value="cancelled">Cancelled</option>
-              </select>
-            </div>
-            <div className="flex justify-end gap-3 pt-2">
-              <Button variant="secondary" onClick={() => setShowEditModal(false)}>Cancel</Button>
-              <Button variant="default" onClick={async () => {
-                if (!editEvent) return;
-                setSubmittingEdit(true)
-                try {
-                  await api.patch(`/appointments/${editEvent.resource.id}/`, { status: editForm.status })
-                  toast.add({ title: 'Appointment status updated!', type: 'success' })
-                  setShowEditModal(false)
-                  void fetchAppointments(date, view)
-                } catch (err) {
-                  setErrorAlert('Failed to update appointment status.')
-                } finally {
-                  setSubmittingEdit(false)
-                }
-              }} disabled={submittingEdit}>
-                {submittingEdit ? 'Saving...' : 'Save Changes'}
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      <PatientFormDialog
-        isOpen={showPatientEditor}
-        onOpenChange={setShowPatientEditor}
-        patient={patientToEdit}
-        onSuccess={() => {
-          // The patient's name is shown on every card, so reload them.
+      <BookAppointmentDialog
+        open={!!booking}
+        onOpenChange={(open) => { if (!open) setBooking(null) }}
+        start={booking?.start}
+        doctorId={booking?.doctorId}
+        onBooked={(appt) => {
+          toast.add({ title: `Booked ${appt.patient_name || 'patient'} for ${format(new Date(appt.starts_at), 'EEE d MMM, h:mm a')}.`, type: 'success' })
           void fetchAppointments(date, view)
         }}
+      />
+
+      <AppointmentDialog
+        appointment={openAppointment}
+        onClose={() => setOpenAppointment(null)}
+        onChanged={() => void fetchAppointments(date, view)}
+        readOnly={isDoctor}
       />
 
       <PatientFormDialog 

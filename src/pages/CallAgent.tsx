@@ -154,7 +154,7 @@ export default function CallAgent() {
 
         {/* Header Text */}
         <div className="text-center space-y-2">
-          <h1 className="text-2xl font-bold tracking-tight text-white">ManageOPD AI Receptionist</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-white">Gunasheela Hospital AI Receptionist</h1>
           <p className="text-sm text-slate-400">Powered by HeyKoala</p>
         </div>
 
@@ -177,7 +177,7 @@ export default function CallAgent() {
 
           <div className={`relative flex h-32 w-32 items-center justify-center rounded-full bg-gradient-to-br from-slate-800 to-slate-900 shadow-2xl transition-all duration-500 ${isSpeaking ? "shadow-[#34E0FF]/50 ring-4 ring-[#34E0FF]/30 scale-110" : isListening ? "shadow-emerald-500/30 ring-2 ring-emerald-500/20 scale-105" : "ring-1 ring-white/10"
             }`}>
-            <img src="/manageopd_icon.png" alt="AI" className="h-12 w-12 object-contain opacity-80" />
+            <img src="/gunasheela_mark.png" alt="AI" className="h-14 w-14 rounded-full object-cover" />
           </div>
         </div>
 

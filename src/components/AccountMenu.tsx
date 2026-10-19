@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { LogOut, User as UserIcon } from 'lucide-react'
 import { api } from '../lib/api'
+import { roleLabel } from '../lib/utils'
 import { useUIStore } from '../store/uistore'
 import { useNavigate } from 'react-router-dom'
 import {
@@ -32,9 +33,12 @@ interface AccountMenuProps {
   currentView?: string
   onSwitchView?: (view: string) => void
   textClassName?: string
+  /** "dark" for the navy sidebar. */
+  tone?: 'light' | 'dark'
 }
 
-export default function AccountMenu({ userName, userEmail, userRole, align = 'right', hasMultiRole, currentView, onSwitchView, textClassName }: AccountMenuProps) {
+export default function AccountMenu({ userName, userEmail, userRole, align = 'right', hasMultiRole, currentView, onSwitchView, textClassName, tone = 'light' }: AccountMenuProps) {
+  const dark = tone === 'dark'
   const [showConfirm, setShowConfirm] = useState(false)
   const navigate = useNavigate()
 
@@ -51,14 +55,15 @@ export default function AccountMenu({ userName, userEmail, userRole, align = 'ri
   return (
     <>
       <DropdownMenu>
-        <DropdownMenuTrigger className="flex w-full items-center gap-3 px-4 py-3 text-sm transition hover:bg-slate-50 outline-hidden">
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-900 text-sm font-bold text-white">
+        <DropdownMenuTrigger className={`flex w-full items-center gap-3 px-4 py-3 text-sm transition outline-hidden ${dark ? 'hover:bg-white/5' : 'hover:bg-slate-50'}`}>
+          <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-bold ${dark ? 'bg-white text-[#0b1437]' : 'bg-slate-900 text-white'}`}>
             {userName.slice(0, 1).toUpperCase()}
           </div>
           <div className={`min-w-0 flex-1 text-left ${textClassName || ''}`}>
-            <p className="truncate text-sm font-semibold text-slate-900">{userName}</p>
-            <p className="truncate text-xs text-slate-500">{userRole ? userRole.replace('_', ' ') : 'Account'}</p>
+            <p className={`truncate text-sm font-semibold ${dark ? 'text-white' : 'text-slate-900'}`}>{userName}</p>
+            <p className={`truncate text-xs capitalize ${dark ? 'text-slate-400' : 'text-slate-500'}`}>{userRole ? roleLabel(userRole) : 'Account'}</p>
           </div>
+          <LogOut aria-hidden="true" className={`h-4 w-4 shrink-0 text-slate-400 ${textClassName || ''}`} />
         </DropdownMenuTrigger>
 
         <DropdownMenuContent
@@ -85,11 +90,11 @@ export default function AccountMenu({ userName, userEmail, userRole, align = 'ri
             <DropdownMenuItem
               className="cursor-pointer text-emerald-700 focus:text-emerald-700 focus:bg-emerald-50"
               onClick={() => {
-                onSwitchView(currentView === 'clinic_admin' ? 'doctor' : 'clinic_admin')
+                onSwitchView(currentView === 'clinic_admin' ? 'receptionist' : 'clinic_admin')
                 navigate('/app/dashboard')
               }}
             >
-              <span>Switch to {currentView === 'clinic_admin' ? 'Doctor Workspace' : 'Admin Console'}</span>
+              <span>Switch to {currentView === 'clinic_admin' ? 'Reception desk' : 'Admin console'}</span>
             </DropdownMenuItem>
           )}
 

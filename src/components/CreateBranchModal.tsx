@@ -70,7 +70,7 @@ export function CreateBranchModal({ isOpen, onClose }: CreateBranchModalProps) {
               value={name}
               onChange={(e) => setName(e.target.value)}
               className="w-full border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-brand-cyan focus:border-brand-cyan outline-none transition-all"
-              placeholder="e.g. ManageOPD Downtown Branch"
+              placeholder="e.g. Gunasheela Hospital – Jayanagar Branch"
               required
             />
           </div>
@@ -82,7 +82,7 @@ export function CreateBranchModal({ isOpen, onClose }: CreateBranchModalProps) {
               onChange={(e) => setClinicType(e.target.value)}
               className="w-full border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-brand-cyan focus:border-brand-cyan outline-none transition-all"
             >
-              <option value="multi_doctor">Multi-Doctor Clinic</option>
+              <option value="multi_doctor">Multi-Doctor Hospital</option>
               <option value="single_doctor">Single Doctor Practice</option>
             </select>
           </div>

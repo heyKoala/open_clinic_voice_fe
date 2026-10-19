@@ -117,8 +117,8 @@ export default function ProfileSettings({ user, reloadUser }: ProfileSettingsPro
       {user.role === 'clinic_admin' && (
         <Card className="flex flex-wrap items-center justify-between gap-3 p-6">
           <div>
-            <h3 className="text-base font-semibold text-slate-950">Looking for clinic details?</h3>
-            <p className="text-sm text-slate-500">The clinic's name, contact details, holidays, phone number and AI receptionist are under Settings.</p>
+            <h3 className="text-base font-semibold text-slate-950">Looking for hospital details?</h3>
+            <p className="text-sm text-slate-500">The hospital's name, contact details, holidays and team are under Settings; the AI receptionist and its phone number are under AI Agent.</p>
           </div>
           <Link to="/app/settings" className="inline-flex items-center rounded-lg bg-slate-900 px-4 text-sm font-medium text-white hover:bg-slate-800">
             Open Settings

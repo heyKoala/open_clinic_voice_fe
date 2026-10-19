@@ -1,9 +1,9 @@
 import { Card } from '../ui/Card'
 import { Button } from '../ui/Button'
 import { Plus, Calendar as CalendarIcon, Clock, User, ChevronRight } from 'lucide-react'
-import { Link } from 'react-router-dom'
 import { useUIStore } from '../../store/uistore'
-import React, { useState } from 'react'
+import React, { useMemo, useState } from 'react'
+import { BookAppointmentDialog } from '../appointments/BookAppointmentDialog'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../shadcn/dialog'
 import { Input } from '../shadcn/input'
 import { DateTimePickerAmPm } from '../ui/DateTimePickerAmPm'
@@ -23,6 +23,7 @@ interface Appointment {
 interface PatientAppointmentTimelineProps {
   appointments: Appointment[]
   patientId?: number
+  patientName?: string
   /** Lets the booking's time, reason and status be changed from the details dialog. */
   canEdit?: boolean
   onRefresh?: () => void | Promise<void>
@@ -35,12 +36,18 @@ const toLocalInput = (iso: string) => {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
 
-export function PatientAppointmentTimeline({ appointments, patientId, canEdit = false, onRefresh }: PatientAppointmentTimelineProps) {
+export function PatientAppointmentTimeline({ appointments, patientId, patientName, canEdit = false, onRefresh }: PatientAppointmentTimelineProps) {
   const [selectedNotesAppt, setSelectedNotesAppt] = useState<Appointment | null>(null)
   const [editForm, setEditForm] = useState({ starts_at: '', reason: '', status: 'scheduled' })
   const [saving, setSaving] = useState(false)
   const [editError, setEditError] = useState('')
   const { userRole, addToast } = useUIStore()
+  const [booking, setBooking] = useState(false)
+  // Held in a memo so the booking form isn't reset on every render.
+  const bookingPatient = useMemo(
+    () => (patientId ? { id: patientId, full_name: patientName || 'This patient' } : null),
+    [patientId, patientName],
+  )
 
   const openAppointment = (appt: Appointment) => {
     setEditError('')
@@ -123,14 +130,21 @@ export function PatientAppointmentTimeline({ appointments, patientId, canEdit = 
           Bookings History
         </h3>
         
-        {/* Hide Add Booking button for clinic_admin since they don't have a booking route */}
-        {userRole !== 'clinic_admin' && (
-          <Link to="/app/booking" state={{ preselectedPatientId: patientId }}>
-            <Button size="sm" className="h-7 text-xs bg-slate-900 text-white hover:bg-slate-800">
-              <Plus className="w-3 h-3 mr-1" /> Add Booking
-            </Button>
-          </Link>
+        {/* Front desk and admins book for this patient right here; doctors don't book. */}
+        {userRole !== 'doctor' && patientId && (
+          <Button size="sm" className="h-7 text-xs bg-slate-900 text-white hover:bg-slate-800" onClick={() => setBooking(true)}>
+            <Plus className="w-3 h-3 mr-1" /> Add Booking
+          </Button>
         )}
+        <BookAppointmentDialog
+          open={booking}
+          onOpenChange={setBooking}
+          patient={bookingPatient}
+          onBooked={() => {
+            addToast('Appointment booked', 'success')
+            void onRefresh?.()
+          }}
+        />
       </div>
       
       <div className="flex-1 overflow-auto bg-slate-50/30">

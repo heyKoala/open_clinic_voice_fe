@@ -1,23 +1,11 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
-import { BrowserRouter, Link, Route, Routes, useNavigate, useSearchParams } from 'react-router-dom'
+import { BrowserRouter, Link, Navigate, Route, Routes, useNavigate, useSearchParams } from 'react-router-dom'
 
 import { api } from './lib/api'
+import { roleLabel } from './lib/utils'
 import { PasswordInput, validatePassword } from './components/ui/PasswordInput'
-import Sidebar from './components/Sidebar'
-import Header from './components/Header'
-import PatientDrawer from './components/PatientDrawer'
-import MobileNavigation from './components/MobileNavigation'
-import PwaInstallPrompt from './components/PwaInstallPrompt'
-import Dashboard from './pages/Dashboard'
-import LiveQueue from './pages/LiveQueue'
-import Patients from './pages/Patients'
-import CallLogs from './pages/CallLogs'
-import CalendarView from './pages/CalendarView'
-import Settings from './pages/Settings'
-import Placeholder from './pages/Placeholder'
 import WorkspaceRouter from './pages/Workspace'
 import OnboardingPage from './pages/Onboarding'
-import { useUIStore } from './store/uistore'
 
 function getApiErrorMessage(error: unknown, fallback: string) {
   if (!error || typeof error !== 'object') {
@@ -58,46 +46,13 @@ function getApiErrorMessage(error: unknown, fallback: string) {
   return messages.length > 0 ? messages.join(' ') : fallback
 }
 
-type ReportTemplateDto = {
-  id: number
-  name: string
-  description: string
-  report_type_display: string
-  format_display: string
-  allowed_roles_display: string[]
-  retention_days: number
-  is_active: boolean
-  created_at?: string
-}
-
-type ReportExecutionDto = {
-  id: number
-  template_name: string
-  report_type_display: string
-  template_format: string
-  status: string
-  status_display: string
-  is_downloadable: boolean
-  download_count: number
-  created_at: string
-  completed_at?: string | null
-  error_message?: string
-  signed_download_url?: string | null
-}
-
-type ReportDefinitionsDto = {
-  report_types: Array<{ value: string; label: string; allowed_roles: string[] }>
-  allowed_roles: Array<{ value: string; label: string }>
-}
-
-import { LandingPage } from './components/landing/LandingPage'
 
 function GetStartedPage() {
   return (
-    <AuthShell title="Get Started" subtitle="Choose how you'd like to continue with ManageOPD.">
+    <AuthShell title="Get Started" subtitle="Choose how you'd like to continue with Gunasheela Hospital.">
       <div className="space-y-3">
         <Link to="/login" className="flex w-full items-center justify-center rounded-xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-slate-800">Sign in to your account</Link>
-        <Link to="/signup" className="flex w-full items-center justify-center rounded-xl border border-slate-300 px-4 py-3 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50">Create a new clinic</Link>
+        <Link to="/signup" className="flex w-full items-center justify-center rounded-xl border border-slate-300 px-4 py-3 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50">Create a new hospital</Link>
       </div>
     </AuthShell>
   )
@@ -132,11 +87,11 @@ function SignupPage() {
   }
 
   return (
-    <AuthShell title="Create your clinic" subtitle="Set up in under 5 minutes. No credit card required.">
+    <AuthShell title="Create your hospital" subtitle="Set up in under 5 minutes. No credit card required.">
       <form className="space-y-4" onSubmit={onSubmit}>
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1.5">Clinic name</label>
-          <input className="w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-sm placeholder:text-slate-400 focus:border-slate-900 focus:ring-1 focus:ring-slate-900 focus:outline-none transition-colors" placeholder="e.g. Sunrise Polyclinic" value={clinicName} onChange={(e) => setClinicName(e.target.value)} required />
+          <label className="block text-sm font-medium text-slate-700 mb-1.5">Hospital name</label>
+          <input className="w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-sm placeholder:text-slate-400 focus:border-slate-900 focus:ring-1 focus:ring-slate-900 focus:outline-none transition-colors" placeholder="e.g. Gunasheela Hospital" value={clinicName} onChange={(e) => setClinicName(e.target.value)} required />
         </div>
 
         <div>
@@ -146,7 +101,7 @@ function SignupPage() {
 
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-1.5">Email address</label>
-          <input className="w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-sm placeholder:text-slate-400 focus:border-slate-900 focus:ring-1 focus:ring-slate-900 focus:outline-none transition-colors" placeholder="you@clinic.com" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+          <input className="w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-sm placeholder:text-slate-400 focus:border-slate-900 focus:ring-1 focus:ring-slate-900 focus:outline-none transition-colors" placeholder="you@hospital.com" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
         </div>
 
         <div>
@@ -180,171 +135,6 @@ function SignupPage() {
   )
 }
 
-export function _ReportsPage() {
-  const [templates, setTemplates] = useState<ReportTemplateDto[]>([])
-  const [executions, setExecutions] = useState<ReportExecutionDto[]>([])
-  const [definitions, setDefinitions] = useState<ReportDefinitionsDto | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
-  const [busyTemplateId, setBusyTemplateId] = useState<number | null>(null)
-  const [busyExecutionId, setBusyExecutionId] = useState<number | null>(null)
-
-  const loadReports = async () => {
-    setLoading(true)
-    setError('')
-    try {
-      const [templateResponse, executionResponse, definitionsResponse] = await Promise.all([
-        api.get('/reports/templates/'),
-        api.get('/reports/executions/'),
-        api.get('/reports/templates/definitions/'),
-      ])
-      setTemplates(templateResponse.data ?? [])
-      setExecutions(executionResponse.data ?? [])
-      setDefinitions(definitionsResponse.data ?? null)
-    } catch (requestError: unknown) {
-      setError(getApiErrorMessage(requestError, 'Could not load reports.'))
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  useEffect(() => {
-    void loadReports()
-  }, [])
-
-  const requestExport = async (templateId: number) => {
-    setBusyTemplateId(templateId)
-    setError('')
-    try {
-      await api.post('/reports/executions/', { template: templateId, parameters: {} })
-      await loadReports()
-    } catch (requestError: unknown) {
-      setError(getApiErrorMessage(requestError, 'Could not queue the export job.'))
-    } finally {
-      setBusyTemplateId(null)
-    }
-  }
-
-  const openSignedDownload = async (executionId: number) => {
-    setBusyExecutionId(executionId)
-    setError('')
-    try {
-      const response = await api.post(`/reports/executions/${executionId}/signed-download/`)
-      const downloadUrl = response.data?.download_url as string | undefined
-      if (downloadUrl) {
-        window.location.assign(downloadUrl)
-      }
-    } catch (requestError: unknown) {
-      setError(getApiErrorMessage(requestError, 'Could not create a signed download link.'))
-    } finally {
-      setBusyExecutionId(null)
-    }
-  }
-
-  return (
-    <div className="min-h-screen bg-slate-50 p-4 md:p-6">
-      <div className="mx-auto grid max-w-6xl gap-4 md:grid-cols-[240px_1fr]">
-        <aside className="rounded-2xl border border-slate-200 bg-white p-4 md:min-h-[80vh]">
-          <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">ManageOPD Console</p>
-          <nav className="mt-4 grid gap-2 text-sm font-medium text-slate-700">
-            <Link to="/app">Dashboard</Link>
-            <a>Patients</a>
-            <a>Doctors</a>
-            <a>Appointments</a>
-            <a>Queue</a>
-            <Link to="/app/reports" className="text-slate-900">Reports</Link>
-            <a>Settings</a>
-          </nav>
-        </aside>
-        <main className="space-y-6 rounded-2xl border border-slate-200 bg-white p-6">
-          <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Secure reporting</p>
-              <h1 className="text-3xl font-semibold tracking-tight text-slate-900">Exports and downloads</h1>
-              <p className="mt-1 text-sm text-slate-600">Request report jobs, then download them through signed URLs that expire automatically.</p>
-            </div>
-            <button type="button" onClick={() => void loadReports()} className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700">
-              Refresh
-            </button>
-          </div>
-
-          {error && <div className="rounded-xl bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</div>}
-
-          {definitions && (
-            <section className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-              <h2 className="text-lg font-semibold text-slate-900">Report types and permissions</h2>
-              <div className="mt-4 grid gap-3 md:grid-cols-2">
-                {definitions.report_types.map((reportType) => (
-                  <article key={reportType.value} className="rounded-xl border border-slate-200 bg-white p-4">
-                    <p className="font-semibold text-slate-900">{reportType.label}</p>
-                    <p className="mt-1 text-sm text-slate-600">Allowed roles: {reportType.allowed_roles.join(', ')}</p>
-                  </article>
-                ))}
-              </div>
-            </section>
-          )}
-
-          <section>
-            <h2 className="text-lg font-semibold text-slate-900">Available templates</h2>
-            <div className="mt-3 grid gap-3">
-              {loading && <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">Loading templates...</div>}
-              {!loading && templates.length === 0 && <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">No report templates are available for your role.</div>}
-              {templates.map((template) => (
-                <article key={template.id} className="rounded-2xl border border-slate-200 p-4">
-                  <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                    <div>
-                      <p className="text-base font-semibold text-slate-900">{template.name}</p>
-                      <p className="text-sm text-slate-600">{template.report_type_display} · {template.format_display} · Retention {template.retention_days} days</p>
-                      <p className="mt-1 text-sm text-slate-500">Roles: {template.allowed_roles_display.join(', ')}</p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => void requestExport(template.id)}
-                      disabled={busyTemplateId === template.id}
-                      className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
-                    >
-                      {busyTemplateId === template.id ? 'Queuing...' : 'Request export'}
-                    </button>
-                  </div>
-                </article>
-              ))}
-            </div>
-          </section>
-
-          <section>
-            <h2 className="text-lg font-semibold text-slate-900">Recent executions</h2>
-            <div className="mt-3 grid gap-3">
-              {executions.map((execution) => (
-                <article key={execution.id} className="rounded-2xl border border-slate-200 p-4">
-                  <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                    <div>
-                      <p className="font-semibold text-slate-900">{execution.template_name}</p>
-                      <p className="text-sm text-slate-600">{execution.report_type_display} · {execution.status_display} · {execution.download_count} downloads</p>
-                      {execution.error_message && <p className="mt-1 text-sm text-rose-600">{execution.error_message}</p>}
-                    </div>
-                    {execution.is_downloadable ? (
-                      <button
-                        type="button"
-                        onClick={() => void openSignedDownload(execution.id)}
-                        disabled={busyExecutionId === execution.id}
-                        className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 disabled:opacity-60"
-                      >
-                        {busyExecutionId === execution.id ? 'Preparing link...' : 'Download'}
-                      </button>
-                    ) : (
-                      <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-500">Not ready yet</span>
-                    )}
-                  </div>
-                </article>
-              ))}
-            </div>
-          </section>
-        </main>
-      </div>
-    </div>
-  )
-}
-
 function LoginPage() {
   const nav = useNavigate()
   const [email, setEmail] = useState('')
@@ -367,11 +157,11 @@ function LoginPage() {
   }
 
   return (
-    <AuthShell title="Welcome back" subtitle="Sign in to your ManageOPD account to continue.">
+    <AuthShell title="Welcome back" subtitle="Sign in to your Gunasheela Hospital account to continue.">
       <form className="space-y-4" onSubmit={onSubmit}>
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-1.5">Email address</label>
-          <input className="w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-sm placeholder:text-slate-400 focus:border-slate-900 focus:ring-1 focus:ring-slate-900 focus:outline-none transition-colors" placeholder="you@clinic.com" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+          <input className="w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-sm placeholder:text-slate-400 focus:border-slate-900 focus:ring-1 focus:ring-slate-900 focus:outline-none transition-colors" placeholder="you@hospital.com" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
         </div>
         <div>
           <div className="flex items-center justify-between mb-1.5">
@@ -416,7 +206,7 @@ function ForgotPasswordPage() {
       <form className="space-y-4" onSubmit={onSubmit}>
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-1.5">Email address</label>
-          <input className="w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-sm placeholder:text-slate-400 focus:border-slate-900 focus:ring-1 focus:ring-slate-900 focus:outline-none transition-colors" placeholder="you@clinic.com" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+          <input className="w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-sm placeholder:text-slate-400 focus:border-slate-900 focus:ring-1 focus:ring-slate-900 focus:outline-none transition-colors" placeholder="you@hospital.com" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
         </div>
         {error && <p className="text-sm text-red-600">{error}</p>}
         {statusMessage && <p className="text-sm text-emerald-700">{statusMessage}</p>}
@@ -562,16 +352,16 @@ function InviteAcceptPage() {
   }
 
   return (
-    <AuthShell title="Accept invitation" subtitle="You've been invited to join a clinic on ManageOPD.">
+    <AuthShell title="Accept invitation" subtitle="You've been invited to join the team at Gunasheela Hospital.">
       {preview && (
         <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-4 space-y-1">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-slate-500">Clinic</span>
+            <span className="text-xs font-medium text-slate-500">Hospital</span>
             <span className="text-sm font-semibold text-slate-900">{preview.clinic_name}</span>
           </div>
           <div className="flex items-center justify-between">
             <span className="text-xs font-medium text-slate-500">Your role</span>
-            <span className="text-sm font-semibold text-slate-900 capitalize">{preview.role.replace('_', ' ')}</span>
+            <span className="text-sm font-semibold text-slate-900 capitalize">{roleLabel(preview.role)}</span>
           </div>
         </div>
       )}
@@ -591,12 +381,6 @@ function InviteAcceptPage() {
   )
 }
 
-function ConsolePage() {
-  const activeTab = useUIStore((state) => state.activeTab)
-  const page = activeTab === 'dashboard' ? <Dashboard /> : activeTab === 'livequeue' ? <LiveQueue /> : activeTab === 'patients' || activeTab === 'doctors' ? <Patients /> : activeTab === 'calllogs' ? <CallLogs /> : activeTab === 'calendar' ? <CalendarView /> : activeTab === 'settings' ? <Settings /> : <Placeholder title={activeTab === 'leads' ? 'Leads' : 'Follow-ups'} />
-  return <div className="flex h-dvh overflow-hidden bg-slate-50 text-slate-900"><Sidebar /><div className="flex min-w-0 flex-1 flex-col"><Header /><main id="main-content" className="flex-1 overflow-y-auto p-4 pb-24 md:p-6"><div className="mx-auto max-w-7xl">{page}</div></main></div><PatientDrawer /><MobileNavigation /><PwaInstallPrompt /></div>
-}
-
 function AuthShell({ title, children, subtitle }: { title: string; children: ReactNode; subtitle?: string }) {
   return (
     <div className="flex min-h-screen font-jakarta">
@@ -609,10 +393,10 @@ function AuthShell({ title, children, subtitle }: { title: string; children: Rea
         {/* Top: Logo */}
         <div>
           <Link to="/" className="flex items-center gap-3 relative z-10 hover:opacity-90 transition-opacity">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/10 backdrop-blur-sm overflow-hidden">
-              <img src="/manageopd_icon.png" alt="ManageOPD" className="w-full h-full object-cover" />
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white overflow-hidden">
+              <img src="/gunasheela_mark.png" alt="Gunasheela Hospital" className="w-full h-full object-cover" />
             </div>
-            <span className="text-xl font-extrabold tracking-tight text-white">ManageOPD</span>
+            <span className="text-xl font-extrabold tracking-tight text-white">Gunasheela Hospital</span>
           </Link>
         </div>
 
@@ -652,10 +436,10 @@ function AuthShell({ title, children, subtitle }: { title: string; children: Rea
         {/* Mobile header */}
         <div className="flex items-center justify-between px-6 py-4 lg:hidden">
           <Link to="/" className="flex items-center gap-2.5">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-900 overflow-hidden">
-              <img src="/manageopd_icon.png" alt="ManageOPD" className="w-full h-full object-cover" />
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-white ring-1 ring-slate-200 overflow-hidden">
+              <img src="/gunasheela_mark.png" alt="Gunasheela Hospital" className="w-full h-full object-cover" />
             </div>
-            <span className="text-lg font-extrabold tracking-tight text-slate-900">ManageOPD</span>
+            <span className="text-lg font-extrabold tracking-tight text-slate-900">Gunasheela Hospital</span>
           </Link>
         </div>
 
@@ -678,7 +462,8 @@ function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/" element={<LandingPage />} />
+        {/* One hospital's staff app: no marketing page, straight to sign-in. */}
+        <Route path="/" element={<Navigate to="/login" replace />} />
         <Route path="/get-started" element={<GetStartedPage />} />
         <Route path="/signup" element={<SignupPage />} />
         <Route path="/login" element={<LoginPage />} />
@@ -688,7 +473,6 @@ function App() {
         <Route path="/invite-accept" element={<InviteAcceptPage />} />
         <Route path="/onboarding" element={<OnboardingPage />} />
         <Route path="/app/*" element={<WorkspaceRouter />} />
-        <Route path="/app/legacy" element={<ConsolePage />} />
       </Routes>
     </BrowserRouter>
   )

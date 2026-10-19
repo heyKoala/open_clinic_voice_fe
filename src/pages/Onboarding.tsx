@@ -56,7 +56,7 @@ const VOICE_OPTIONS = [
 ]
 
 const steps = [
-  { id: 1, title: 'About Clinic', icon: Building2 },
+  { id: 1, title: 'About Hospital', icon: Building2 },
   { id: 2, title: 'Phone Number', icon: Phone },
   { id: 3, title: 'Voice Agent', icon: Mic },
 ]
@@ -129,7 +129,7 @@ export default function OnboardingPage() {
         ai_phone_number: phoneMode === 'buy' ? (boughtNumber ? formatPhoneNumber(boughtNumber) : '') : ownNumber,
         ai_voice_type: selectedVoice,
       })
-      addToast('Welcome to ManageOPD! Your clinic is all set up.', 'success')
+      addToast('Welcome to Gunasheela Hospital! Your hospital is all set up.', 'success')
       nav('/app/dashboard', { replace: true })
     } catch {
       addToast('Something went wrong. Please try again.', 'error')
@@ -144,10 +144,10 @@ export default function OnboardingPage() {
       <header className="border-b border-slate-200/60 bg-white/80 backdrop-blur-xl px-6 py-4">
         <div className="max-w-4xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-900 overflow-hidden">
-              <img src="/manageopd_icon.png" alt="ManageOPD" className="w-full h-full object-cover" />
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-white ring-1 ring-slate-200 overflow-hidden">
+              <img src="/gunasheela_mark.png" alt="Gunasheela Hospital" className="w-full h-full object-cover" />
             </div>
-            <span className="text-lg font-extrabold tracking-tight text-slate-900">ManageOPD</span>
+            <span className="text-lg font-extrabold tracking-tight text-slate-900">Gunasheela Hospital</span>
           </div>
           <span className="text-xs font-medium text-slate-400 uppercase tracking-widest">Setup Wizard</span>
         </div>
@@ -199,23 +199,23 @@ export default function OnboardingPage() {
                 <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-3xl mb-4 shadow-lg shadow-blue-500/25">
                   <Building2 className="h-8 w-8 text-white" />
                 </div>
-                <h2 className="text-2xl font-bold text-slate-900">Tell us about your clinic</h2>
+                <h2 className="text-2xl font-bold text-slate-900">Tell us about your hospital</h2>
                 <p className="text-sm text-slate-500 mt-2">This helps our AI understand your practice and answer patient questions.</p>
               </div>
 
               <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-5">
                 <div className="space-y-1.5">
-                  <label className="text-sm font-medium text-slate-700">Clinic Description *</label>
+                  <label className="text-sm font-medium text-slate-700">Hospital Description *</label>
                   <textarea
                     className="w-full min-h-[100px] rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900 transition-shadow"
-                    placeholder="e.g. A multi-specialty family clinic offering general medicine, pediatrics, and dental care in the heart of Bangalore..."
+                    placeholder="e.g. A multi-specialty hospital offering general medicine, pediatrics, and dental care in the heart of Bangalore..."
                     value={clinicDescription}
                     onChange={(e) => setClinicDescription(e.target.value)}
                   />
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-sm font-medium text-slate-700">Clinic Address</label>
+                  <label className="text-sm font-medium text-slate-700">Hospital Address</label>
                   <textarea
                     className="w-full min-h-[60px] rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900 transition-shadow"
                     placeholder="123, MG Road, Bangalore 560001"
@@ -225,7 +225,7 @@ export default function OnboardingPage() {
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-sm font-medium text-slate-700">Clinic Type</label>
+                  <label className="text-sm font-medium text-slate-700">Hospital Type</label>
                   <div className="grid grid-cols-2 gap-3">
                     {(['single_doctor', 'multi_doctor'] as const).map(type => (
                       <button
@@ -239,14 +239,14 @@ export default function OnboardingPage() {
                         }`}
                       >
                         <p className="text-sm font-semibold text-slate-900">{type === 'single_doctor' ? 'Single Doctor' : 'Multi Doctor'}</p>
-                        <p className="text-xs text-slate-500 mt-1">{type === 'single_doctor' ? 'Solo practitioner clinic' : 'Multiple doctors or specialties'}</p>
+                        <p className="text-xs text-slate-500 mt-1">{type === 'single_doctor' ? 'Solo practitioner hospital' : 'Multiple doctors or specialties'}</p>
                       </button>
                     ))}
                   </div>
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-sm font-medium text-slate-700">Clinic Contact Number</label>
+                  <label className="text-sm font-medium text-slate-700">Hospital Contact Number</label>
                   <input
                     className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900 transition-shadow"
                     placeholder="+91 80 1234 5678"
@@ -283,7 +283,7 @@ export default function OnboardingPage() {
                   >
                     <div className="text-2xl mb-2">📱</div>
                     <p className="text-sm font-bold text-slate-900">Get a new number</p>
-                    <p className="text-xs text-slate-500 mt-1">We'll provision a dedicated AI phone number for your clinic.</p>
+                    <p className="text-xs text-slate-500 mt-1">We'll provision a dedicated AI phone number for your hospital.</p>
                   </button>
                   <button
                     type="button"
@@ -339,7 +339,7 @@ export default function OnboardingPage() {
                   <Mic className="h-8 w-8 text-white" />
                 </div>
                 <h2 className="text-2xl font-bold text-slate-900">Choose your AI voice persona</h2>
-                <p className="text-sm text-slate-500 mt-2">Select the personality that best fits your clinic's identity.</p>
+                <p className="text-sm text-slate-500 mt-2">Select the personality that best fits your hospital's identity.</p>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -420,7 +420,7 @@ export default function OnboardingPage() {
                 className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-emerald-600 text-white text-sm font-semibold hover:from-emerald-600 hover:to-emerald-700 transition-all disabled:opacity-40 disabled:cursor-not-allowed shadow-lg shadow-emerald-500/25"
               >
                 <Sparkles className="h-4 w-4" />
-                {isSubmitting ? 'Setting up...' : 'Launch My Clinic'}
+                {isSubmitting ? 'Setting up...' : 'Launch My Hospital'}
               </button>
             )}
           </div>

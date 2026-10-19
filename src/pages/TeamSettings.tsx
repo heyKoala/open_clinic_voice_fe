@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import { api } from '../lib/api'
+import { roleLabel } from '../lib/utils'
 import { useUIStore } from '../store/uistore'
 import { Button } from '../components/ui/Button'
 import { EditMemberDialog } from '../components/EditMemberDialog'
@@ -76,11 +77,8 @@ export default function TeamSettings({ team, invites, loading, load, user, reloa
   }
 
   return (
-    <div className="mx-auto max-w-5xl space-y-8 animate-in fade-in duration-500">
-      <div className="flex flex-col gap-1">
-        <h1 className="text-2xl font-bold tracking-tight text-slate-950">Team Settings</h1>
-        <p className="text-slate-500">Manage and view your coworkers and guests.</p>
-      </div>
+    <div className="space-y-8 animate-in fade-in duration-500">
+      <p className="text-sm text-slate-500">Invite doctors and receptionists, and manage who has access.</p>
 
       {/* Invite Bar */}
       <form onSubmit={handleSendInvite} className="flex flex-col md:flex-row gap-4 items-center bg-white p-3 pr-3 rounded-2xl shadow-sm border border-slate-200">
@@ -142,7 +140,7 @@ export default function TeamSettings({ team, invites, loading, load, user, reloa
                         {formatDate(invite.created_at)}
                       </td>
                       <td className="px-5 py-3.5">
-                        <span className="capitalize text-slate-600">{invite.role.replace('_', ' ')}</span>
+                        <span className="capitalize text-slate-600">{roleLabel(invite.role)}</span>
                       </td>
                       <td className="px-5 py-3.5 text-right">
                         <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-medium tracking-wide ${invite.status === 'Accepted' ? 'bg-emerald-100 text-emerald-800' : invite.status === 'Pending' ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-800'}`}>
@@ -192,7 +190,7 @@ export default function TeamSettings({ team, invites, loading, load, user, reloa
                               {member.full_name}
                               {member.id === user.id && <span className="text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded uppercase font-bold tracking-wider">(You)</span>}
                             </span>
-                            <span className="text-xs text-slate-500 capitalize md:hidden">{member.role.replace('_', ' ')}</span>
+                            <span className="text-xs text-slate-500 capitalize md:hidden">{roleLabel(member.role)}</span>
                           </div>
                         </div>
                       </td>
@@ -202,7 +200,7 @@ export default function TeamSettings({ team, invites, loading, load, user, reloa
                       <td className="px-5 py-3.5">
                         <div className="flex flex-wrap gap-1.5 items-center">
                           <span className="inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-700 capitalize">
-                            {member.role.replace('_', ' ')}
+                            {roleLabel(member.role)}
                           </span>
                           {member.is_clinic_admin && (
                             <span className="inline-flex items-center gap-1 rounded-full bg-indigo-50 px-2 py-0.5 text-[11px] font-semibold text-indigo-700">
@@ -224,10 +222,12 @@ export default function TeamSettings({ team, invites, loading, load, user, reloa
                       </td>
                       <td className="px-5 py-3.5 text-right">
                         <DropdownMenu>
-                          <DropdownMenuTrigger>
-                            <Button variant="ghost" className="h-8 w-8 p-0 text-slate-400 hover:text-slate-600 rounded-lg">
-                              <MoreHorizontal className="h-4 w-4" />
-                            </Button>
+                          {/* The trigger is itself the button (a Button inside it would nest buttons). */}
+                          <DropdownMenuTrigger
+                            aria-label="Member actions"
+                            className="inline-flex h-8 w-8 !min-h-0 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+                          >
+                            <MoreHorizontal className="h-4 w-4" />
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end" className="w-48 bg-white rounded-xl shadow-lg border border-slate-100 p-1">
                             <DropdownMenuGroup>

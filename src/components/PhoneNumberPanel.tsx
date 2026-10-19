@@ -102,7 +102,7 @@ export function PhoneNumberPanel({ onChange }: { onChange?: (number: OwnedNumber
       setResults(null)
       const bought = res.data.phone_number as OwnedNumber
       addToast(bought.status === 'active'
-        ? `${formatPhoneNumber(bought.number)} is now your clinic's number.`
+        ? `${formatPhoneNumber(bought.number)} is now your hospital's number.`
         : `${formatPhoneNumber(bought.number)} was bought. ${STATUS_LABEL[bought.status].text}.`,
         bought.status === 'active' ? 'success' : 'warning')
     } catch (err) {
@@ -150,9 +150,6 @@ export function PhoneNumberPanel({ onChange }: { onChange?: (number: OwnedNumber
   }
 
   const owned = state.phone_number
-  const sharedNote = state.shared_with.length > 1
-    ? `Shared by all ${state.shared_with.length} centres: ${state.shared_with.join(', ')}.`
-    : 'Any centres you add later will share this number.'
 
   if (owned) {
     const label = STATUS_LABEL[owned.status]
@@ -168,7 +165,6 @@ export function PhoneNumberPanel({ onChange }: { onChange?: (number: OwnedNumber
           </div>
           <span className={`rounded-full border px-3 py-1 text-xs font-medium ${label.className}`}>{label.text}</span>
         </div>
-        <p className="text-sm text-slate-500">{sharedNote}</p>
         {owned.last_error && (
           <p className="flex items-start gap-2 rounded-lg bg-amber-50 p-3 text-sm text-amber-800">
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" /> {owned.last_error}
@@ -192,8 +188,8 @@ export function PhoneNumberPanel({ onChange }: { onChange?: (number: OwnedNumber
             </DialogHeader>
             <p className="text-sm text-slate-600">
               {owned.bought_here
-                ? 'Patients calling this number will no longer reach any of your centres, and the number goes back to the provider. You may not be able to get the same number again.'
-                : 'The number will no longer be linked to your centres here. It stays on your telecom account and is not released.'}
+                ? 'Patients calling this number will no longer reach the hospital, and the number goes back to the provider. You may not be able to get the same number again.'
+                : 'The number will no longer be linked to the hospital here. It stays on your telecom account and is not released.'}
             </p>
             <div className="flex justify-end gap-3 pt-2">
               <Button variant="secondary" onClick={() => setConfirmRelease(false)}>Keep it</Button>
@@ -246,8 +242,6 @@ export function PhoneNumberPanel({ onChange }: { onChange?: (number: OwnedNumber
         </div>
       ))}
 
-      <p className="text-xs text-slate-500">{sharedNote}</p>
-
       <Dialog open={!!toBuy} onOpenChange={open => { if (!open) setToBuy(null) }}>
         <DialogContent>
           <DialogHeader><DialogTitle>Buy {toBuy ? formatPhoneNumber(toBuy.number) : ''}?</DialogTitle></DialogHeader>
@@ -257,7 +251,7 @@ export function PhoneNumberPanel({ onChange }: { onChange?: (number: OwnedNumber
                 This rents the number from the telecom provider{price(toBuy.monthly_rental_rate) ? ` for ${price(toBuy.monthly_rental_rate)}` : ''}
                 {Number(toBuy.setup_rate) > 0 ? ` plus a $${Number(toBuy.setup_rate).toFixed(2)} setup fee` : ''}, charged to your provider account.
               </p>
-              <p>Patients calling it will reach your AI receptionist, which can book at every one of your centres.</p>
+              <p>Patients calling it will reach your AI receptionist, which books appointments with your doctors.</p>
               {toBuy.requires_compliance && (
                 <p className="flex items-start gap-2 rounded-lg bg-amber-50 p-3 text-amber-800">
                   <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />

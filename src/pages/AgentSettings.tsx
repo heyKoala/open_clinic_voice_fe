@@ -10,7 +10,20 @@ type ModelType = 'standard' | 'realtime'
 /** One stage's choice. Which of these a provider actually uses is told by its `config_fields`. */
 type Stage = { provider?: string; model?: string; language?: string; voice?: string; temperature?: number }
 
-type AgentSettings = {
+type Listening = 'patient' | 'balanced' | 'quick'
+
+/** Call audio and listening: sent with every call, and (the first three) stored on the hospital number. */
+type CallAudio = {
+  noise_cancellation: boolean
+  /** Maximum attenuation in dB; null = the voice service's default (about 30). */
+  noise_cancellation_level: number | null
+  recording_disclosure: boolean
+  listening: Listening
+  max_silence_seconds: number
+  thinking_sound: boolean
+}
+
+type AgentSettings = CallAudio & {
   first_message: string
   system_prompt: string
   model_type: ModelType
@@ -20,10 +33,20 @@ type AgentSettings = {
   tts: Stage
   realtime: Stage
   defaults: { first_message: string; system_prompt: string }
+  call_defaults: CallAudio
+  listening_options: { id: Listening; label: string }[]
+  /** Whether changes to the inbound flags can be pushed to the hospital number. */
+  inbound_number: { configured: boolean }
+  /** Present on a save that changed the inbound flags: what happened at the voice service. */
+  inbound_applied?: { ok: boolean; detail: string }
   owner_clinic: { id: number; name: string }
   catalog_available: boolean
   preview_providers: string[]
 }
+
+const CALL_AUDIO_KEYS: (keyof CallAudio)[] = [
+  'noise_cancellation', 'noise_cancellation_level', 'recording_disclosure', 'listening', 'max_silence_seconds', 'thinking_sound',
+]
 
 type Option = { id: string; label?: string; gender?: string; language?: string; description?: string }
 type ProviderSummary = { name: string; description: string }
@@ -49,6 +72,151 @@ function errorMessage(err: any, fallback: string) {
     if (Array.isArray(first) && typeof first[0] === 'string') return first[0]
   }
   return fallback
+}
+
+function Toggle({ label, hint, checked, onChange }: { label: string; hint?: string; checked: boolean; onChange: (value: boolean) => void }) {
+  return (
+    <div className="flex items-start justify-between gap-4">
+      <div>
+        <p className="text-sm font-medium text-slate-900">{label}</p>
+        {hint && <p className="mt-0.5 text-xs leading-relaxed text-slate-500">{hint}</p>}
+      </div>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={checked}
+        aria-label={label}
+        onClick={() => onChange(!checked)}
+        className={`relative mt-0.5 inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${checked ? 'bg-slate-900' : 'bg-slate-300'}`}
+      >
+        <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${checked ? 'translate-x-5' : 'translate-x-0.5'}`} />
+      </button>
+    </div>
+  )
+}
+
+/** The 'Call audio' and 'Listening' sections of the AI receptionist settings. */
+function CallAudioEditor({ settings, errors, onChange }: {
+  settings: AgentSettings
+  errors: Record<string, string>
+  onChange: (patch: Partial<CallAudio>) => void
+}) {
+  const level = settings.noise_cancellation_level
+  const err = (key: keyof CallAudio) => errors[key] && <p className="mt-1 text-xs font-medium text-red-600">{errors[key]}</p>
+  return (
+    <>
+      <div className="space-y-5 rounded-2xl border border-slate-200 bg-white p-6">
+        <div>
+          <h3 className="text-base font-semibold text-slate-900">Call audio</h3>
+          <p className="mt-1 text-sm text-slate-500">
+            Applies to calls patients make to the hospital number, the reminder and feedback calls, and test calls.
+          </p>
+        </div>
+
+        <Toggle
+          label="Noise cancellation"
+          hint="Cleans the caller's audio before the receptionist listens to it. Helps with callers on the road, in a ward or on speakerphone."
+          checked={settings.noise_cancellation}
+          onChange={(value) => onChange({ noise_cancellation: value })}
+        />
+        {settings.noise_cancellation && (
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-sm font-medium text-slate-900">Strength</p>
+              <p className="text-xs text-slate-500">{level === null ? 'Default (about 30 dB)' : `Up to ${level} dB`}</p>
+            </div>
+            <input
+              type="range"
+              min={5}
+              max={60}
+              step={5}
+              value={level ?? 30}
+              onChange={(e) => onChange({ noise_cancellation_level: Number(e.target.value) })}
+              className="mt-2 w-full accent-slate-900"
+              aria-label="Noise cancellation strength"
+            />
+            <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+              <p className="text-xs leading-relaxed text-slate-500">
+                Higher removes more background noise but can dull the caller's voice. On a clean line it makes no difference.
+              </p>
+              {level !== null && (
+                <button type="button" className="text-xs font-semibold text-slate-700 hover:underline" onClick={() => onChange({ noise_cancellation_level: null })}>
+                  Use the default
+                </button>
+              )}
+            </div>
+            {err('noise_cancellation_level')}
+          </div>
+        )}
+
+        <Toggle
+          label="Recording notice before the greeting"
+          hint="Plays a fixed English clip, “This call may be recorded for quality and training purposes”, before the receptionist speaks. Leave off if the greeting already says so."
+          checked={settings.recording_disclosure}
+          onChange={(value) => onChange({ recording_disclosure: value })}
+        />
+
+        <p className="text-xs leading-relaxed text-slate-500">
+          {settings.inbound_number.configured
+            ? 'Changes to these two are also applied to the hospital number when you save.'
+            : 'The hospital number is not linked yet (ROCK8_INBOUND_TRUNK_ID / ROCK8_INBOUND_RULE_ID), so these two apply to outbound and test calls only.'}
+        </p>
+      </div>
+
+      <div className="space-y-5 rounded-2xl border border-slate-200 bg-white p-6">
+        <div>
+          <h3 className="text-base font-semibold text-slate-900">Listening</h3>
+          <p className="mt-1 text-sm text-slate-500">When the receptionist takes its turn, and when it gives up on a silent line.</p>
+        </div>
+
+        <div>
+          <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-slate-500">Turn-taking</span>
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+            {settings.listening_options.map((option) => {
+              const [title, ...rest] = option.label.split(': ')
+              return (
+                <button
+                  key={option.id}
+                  type="button"
+                  onClick={() => onChange({ listening: option.id })}
+                  className={`rounded-xl border-2 p-3 text-left transition-colors ${
+                    settings.listening === option.id ? 'border-slate-900 bg-slate-50' : 'border-slate-200 bg-white hover:border-slate-300'
+                  }`}
+                >
+                  <span className="block text-sm font-semibold text-slate-900">{title}</span>
+                  <span className="mt-1 block text-xs leading-relaxed text-slate-500">{rest.join(': ')}</span>
+                </button>
+              )
+            })}
+          </div>
+          {err('listening')}
+        </div>
+
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <Field label="Hang up after silence (seconds)">
+            <input
+              type="number"
+              min={15}
+              max={600}
+              className={inputClass}
+              value={settings.max_silence_seconds}
+              onChange={(e) => onChange({ max_silence_seconds: Number(e.target.value) })}
+            />
+            <p className="mt-1 text-xs text-slate-500">Reminder and feedback calls hang up after 30 seconds at most.</p>
+            {err('max_silence_seconds')}
+          </Field>
+          <div className="pt-6">
+            <Toggle
+              label="Thinking sound"
+              hint="A soft sound while the receptionist works out its reply, so the line doesn't feel dead."
+              checked={settings.thinking_sound}
+              onChange={(value) => onChange({ thinking_sound: value })}
+            />
+          </div>
+        </div>
+      </div>
+    </>
+  )
 }
 
 function Field({ label, children }: { label: string; children: ReactNode }) {
@@ -292,9 +460,12 @@ export default function AgentSettingsPage() {
     setErrors({})
     try {
       const { first_message, system_prompt, model_type, stt, llm, tts, realtime } = settings
-      const res = await api.put('/ai/voice-agent/', { first_message, system_prompt, model_type, stt, llm, tts, realtime })
+      const callAudio = Object.fromEntries(CALL_AUDIO_KEYS.map((key) => [key, settings[key]]))
+      const res = await api.put('/ai/voice-agent/', { first_message, system_prompt, model_type, stt, llm, tts, realtime, ...callAudio })
       setSettings(res.data)
-      addToast('AI receptionist settings saved. They apply from the next call.', 'success')
+      const applied = (res.data as AgentSettings).inbound_applied
+      if (applied && !applied.ok) addToast(`Settings saved, but not applied to the hospital number: ${applied.detail}`, 'error')
+      else addToast(applied ? `Settings saved. ${applied.detail}` : 'AI receptionist settings saved. They apply from the next call.', 'success')
     } catch (err: any) {
       const data = err?.response?.data
       if (err?.response?.status === 400 && data && typeof data === 'object') setErrors(data)
@@ -305,7 +476,7 @@ export default function AgentSettingsPage() {
   }
 
   const reset = async () => {
-    if (!window.confirm('Discard your greeting, instructions and model choices and go back to the defaults?')) return
+    if (!window.confirm('Discard your greeting, instructions, model choices and call audio settings and go back to the defaults?')) return
     setSaving(true)
     setErrors({})
     try {
@@ -324,7 +495,7 @@ export default function AgentSettingsPage() {
       <div>
         <h3 className="text-lg font-semibold text-slate-900">AI receptionist</h3>
         <p className="mt-1 text-sm text-slate-500">
-          What the receptionist says and the models it runs on, for {settings.owner_clinic.name} and its centres.
+          What the receptionist says, how it handles the call's audio, and the models it runs on, for {settings.owner_clinic.name}.
         </p>
       </div>
 
@@ -339,7 +510,7 @@ export default function AgentSettingsPage() {
         <div>
           <h3 className="text-base font-semibold text-slate-900">Greeting and instructions</h3>
           <p className="mt-1 text-sm text-slate-500">
-            Write <code className="rounded bg-slate-100 px-1 text-xs">{'{clinic_name}'}</code> where the clinic's name should appear.
+            Write <code className="rounded bg-slate-100 px-1 text-xs">{'{clinic_name}'}</code> where the hospital's name should appear.
           </p>
         </div>
 
@@ -362,7 +533,7 @@ export default function AgentSettingsPage() {
         </Field>
         <div className="flex flex-wrap items-center justify-between gap-2">
           <p className="text-xs text-slate-500">
-            Today's date, the caller's number and each centre's details are added to the instructions automatically.
+            Today's date, the caller's number and the hospital's details are added to the instructions automatically.
           </p>
           <button
             type="button"
@@ -374,6 +545,8 @@ export default function AgentSettingsPage() {
           </button>
         </div>
       </div>
+
+      <CallAudioEditor settings={settings} errors={errors} onChange={(patch) => update(patch)} />
 
       <div className="space-y-5 rounded-2xl border border-slate-200 bg-white p-6">
         <div>

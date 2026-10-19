@@ -18,10 +18,9 @@ api.interceptors.request.use((config) => {
       config.headers.set('X-CSRFToken', csrfToken)
     }
   }
-  const activeClinicId = localStorage.getItem('active_clinic_id')
-  if (activeClinicId) {
-    config.headers.set('X-Active-Clinic-Id', activeClinicId)
-  }
+  // Which centre's records to show: a centre id, or "all" for every centre of the hospital (the default).
+  // The backend keeps users who belong to a single centre on that centre whatever is sent.
+  config.headers.set('X-Active-Clinic-Id', localStorage.getItem('active_clinic_id') || 'all')
   return config
 })
 
