@@ -1,11 +1,10 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis } from 'recharts'
 import { addDays, format, isBefore } from 'date-fns'
 import { AlertTriangle, ArrowRight, CheckCircle2, Footprints, MessageCircle, PhoneCall, Plus, UserRound } from 'lucide-react'
 import { api } from '../lib/api'
 import {
-  OUTCOMES, OTHER_OUTCOME, formatDuration, getAIAnalytics, localDateKey, type AIAnalytics, type CallLog, type Paginated,
+  formatDuration, getAIAnalytics, localDateKey, type AIAnalytics, type CallLog, type Paginated,
 } from '../lib/analytics'
 import { STATUS_META, apiErrorMessage, type Appointment } from '../lib/appointments'
 import {
@@ -14,24 +13,12 @@ import {
 import { AppointmentDialog } from '../components/appointments/AppointmentDialog'
 import { BookAppointmentDialog } from '../components/appointments/BookAppointmentDialog'
 import { RecordCallDialog } from '../components/appointments/RecordCallDialog'
-import { BreakdownBar } from '../components/analytics/BreakdownBar'
 import { Button } from '../components/ui/Button'
 import { toast } from '../components/shadcn/toast'
 import { useRealtimeEvents } from '../hooks/useRealtimeEvents'
 import { formatPhone } from '../lib/phone'
 
-type FollowUp = {
-  id: number
-  patient: number
-  patient_name?: string
-  doctor_name?: string
-  scheduled_for: string
-  method: string
-  status: string
-  notes: string
-}
-
-type Kind = 'checkin' | 'reschedule' | 'callback' | 'followup' | 'reminder' | 'payment' | 'feedback'
+type Kind = 'checkin' | 'visit' | 'reschedule' | 'callback' | 'reminder' | 'payment' | 'feedback'
 type Bucket = 'overdue' | 'today' | 'upcoming'
 
 type Task = {
@@ -41,15 +28,14 @@ type Task = {
   when: Date
   title: string
   subtitle: string
-  demo?: boolean
   action: { label: string; run: () => void | Promise<void> }
 }
 
 const KINDS: { kind: Kind | 'all'; label: string }[] = [
   { kind: 'all', label: 'All tasks' },
   { kind: 'checkin', label: 'Check-ins' },
+  { kind: 'visit', label: 'Visits' },
   { kind: 'callback', label: 'Callbacks' },
-  { kind: 'followup', label: 'Follow-ups' },
   { kind: 'reschedule', label: 'Reschedule' },
   { kind: 'reminder', label: 'Reminders' },
   { kind: 'feedback', label: 'Feedback' },
@@ -59,7 +45,7 @@ const KIND_CHIP: Record<Kind, { label: string; className: string }> = {
   checkin: { label: 'Check-in', className: 'border-emerald-200 bg-emerald-50 text-emerald-700' },
   reschedule: { label: 'Reschedule', className: 'border-amber-200 bg-amber-50 text-amber-800' },
   callback: { label: 'Callback', className: 'border-rose-200 bg-rose-50 text-rose-700' },
-  followup: { label: 'Follow-up', className: 'border-sky-200 bg-sky-50 text-sky-700' },
+  visit: { label: 'Visit', className: 'border-sky-200 bg-sky-50 text-sky-700' },
   reminder: { label: 'Reminder', className: 'border-violet-200 bg-violet-50 text-violet-700' },
   payment: { label: 'Payment', className: 'border-orange-200 bg-orange-50 text-orange-700' },
   feedback: { label: 'Feedback', className: 'border-pink-200 bg-pink-50 text-pink-700' },
@@ -123,7 +109,6 @@ export default function FrontDesk({ userName, callsPath, callDetailPath }: {
   const [callSettings, setCallSettings] = useState<PatientCallSettings | null>(null)
   const [logging, setLogging] = useState<PatientCall | null>(null)
   const [toReschedule, setToReschedule] = useState<Appointment[]>([])
-  const [followups, setFollowups] = useState<FollowUp[]>([])
   const [missedCalls, setMissedCalls] = useState<CallLog[]>([])
   const [week, setWeek] = useState<AIAnalytics | null>(null)
   const [loading, setLoading] = useState(true)
@@ -151,9 +136,6 @@ export default function FrontDesk({ userName, callsPath, callDetailPath }: {
       appts(1, { status: 'scheduled' }),
       getCallsToDo(),
       api.get('/appointments/', { params: { status: 'needs_reschedule', page_size: 100, ordering: 'starts_at' } }).then((r) => unwrap<Appointment>(r.data)),
-      api.get('/followups/followups/', {
-        params: { scheduled_for_before: dayBounds(3).before, ordering: 'scheduled_for', page_size: 100 },
-      }).then((r) => unwrap<FollowUp>(r.data).filter((f) => f.status === 'pending' || f.status === 'scheduled')),
       api.get<Paginated<CallLog>>('/ai/call-logs/', {
         // Staff test calls never need a callback.
         params: { outcome: 'unanswer', is_test: false, occurred_at_after: dayBounds(-1).after, ordering: '-occurred_at', page_size: 50 },
@@ -167,10 +149,9 @@ export default function FrontDesk({ userName, callsPath, callDetailPath }: {
       setTomorrow(value(1, []))
       setPatientCalls(value(2, []))
       setToReschedule(value(3, []))
-      setFollowups(value(4, []))
-      setMissedCalls(value(5, []))
-      setWeek(value(6, null))
-      setCallSettings(value(7, null))
+      setMissedCalls(value(4, []))
+      setWeek(value(5, null))
+      setCallSettings(value(6, null))
       setLoading(false)
     })
     return () => { cancelled = true }
@@ -230,15 +211,20 @@ export default function FrontDesk({ userName, callsPath, callDetailPath }: {
       })
     }
 
-    for (const f of followups) {
-      const when = new Date(f.scheduled_for)
-      const todayEnd = new Date(dayBounds(0).before)
+    // Patients who are checked in: once the doctor has seen them, the desk marks the visit completed,
+    // which plans the feedback call for the next day.
+    for (const a of today) {
+      if (a.status !== 'checked_in') continue
+      const when = new Date(a.starts_at)
       out.push({
-        id: `followup-${f.id}`, kind: 'followup', when,
-        bucket: isBefore(when, now) ? 'overdue' : isBefore(when, todayEnd) ? 'today' : 'upcoming',
-        title: `Follow up with ${f.patient_name ?? 'patient'}`,
-        subtitle: `${format(when, 'EEE d MMM, h:mm a')} · by ${f.method.replace('_', ' ')}${f.notes ? ` · ${f.notes}` : ''}`,
-        action: { label: 'Mark done', run: () => runTask(`followup-${f.id}`, () => api.patch(`/followups/followups/${f.id}/`, { status: 'completed' }), 'Follow-up marked done.') },
+        id: `visit-${a.id}`, kind: 'visit', when, bucket: 'today',
+        title: `With the doctor: ${a.patient_name ?? 'Patient'}`,
+        subtitle: `${format(when, 'h:mm a')} · Dr. ${a.doctor_name ?? a.doctor}${a.reason ? ` · ${a.reason}` : ''} · mark completed once seen`,
+        action: {
+          label: 'Visit completed',
+          run: () => runTask(`visit-${a.id}`, () => api.post(`/appointments/${a.id}/complete/`),
+            `${a.patient_name ?? 'Patient'}'s visit completed. The feedback call is planned for tomorrow.`),
+        },
       })
     }
 
@@ -291,7 +277,7 @@ export default function FrontDesk({ userName, callsPath, callDetailPath }: {
 
     return out.sort((x, y) => x.when.getTime() - y.when.getTime())
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [today, tomorrow, patientCalls, callSettings, toReschedule, followups, missedCalls, callDetailPath])
+  }, [today, tomorrow, patientCalls, callSettings, toReschedule, missedCalls, callDetailPath])
 
   // Open on the most urgent group that has something in it.
   const [pickedBucket, setPickedBucket] = useState(false)
@@ -311,27 +297,6 @@ export default function FrontDesk({ userName, callsPath, callDetailPath }: {
 
   // Right column
   const s = week?.summary
-  const outcomeData = s ? [
-    { name: 'booked', label: 'Booking', value: s.calls_with_booking, fill: OUTCOMES[0].color },
-    { name: 'cancel', label: 'Cancellation', value: s.calls_cancelled, fill: OUTCOMES[1].color },
-    { name: 'resched', label: 'Rescheduled', value: s.calls_rescheduled ?? 0, fill: OUTCOMES[2].color },
-    { name: 'info', label: 'Information', value: s.calls_info_only, fill: OUTCOMES[3].color },
-    { name: 'callback', label: 'Needs callback', value: s.calls_needs_callback ?? 0, fill: OUTCOMES[4].color },
-    { name: 'other', label: 'Other', value: (s.calls_other ?? 0) + (s.calls_unanswered ?? 0), fill: OTHER_OUTCOME.color },
-  ] : []
-  const perDay = useMemo(() => {
-    const byDate = new Map((week?.calls_by_day ?? []).map((d) => [d.date, d.total]))
-    return Array.from({ length: 7 }, (_, i) => {
-      const key = localDateKey(addDays(new Date(), i - 6))
-      return { date: key, calls: byDate.get(key) ?? 0 }
-    })
-  }, [week])
-  const statusColors: Record<string, string> = {
-    scheduled: '#6366f1', checked_in: '#10b981', completed: '#14b8a6', needs_reschedule: '#f59e0b', no_show: '#f43f5e', cancelled: '#94a3b8',
-  }
-  const todayByStatus = Object.entries(STATUS_META).map(([status, meta]) => ({
-    name: status, label: meta.label, value: today.filter((a) => a.status === status).length, fill: statusColors[status],
-  }))
   const aiBookedToday = today.filter((a) => a.source === 'phone').length
 
   // Today's appointments by the channel they were booked through (cancelled ones left out). Every channel is
@@ -346,14 +311,13 @@ export default function FrontDesk({ userName, callsPath, callDetailPath }: {
   const countStatus = (...statuses: string[]) => today.filter((a) => statuses.includes(a.status)).length
   const activeToday = today.length - countStatus('cancelled')
   const seenToday = countStatus('completed')
-  const todayEnd = new Date(dayBounds(0).before)
-  const followupsDueToday = followups.filter((f) => new Date(f.scheduled_for) <= todayEnd).length
+  const feedbackDue = tasks.filter((t) => t.kind === 'feedback' && t.bucket !== 'upcoming').length
   const glance = [
     { label: 'Appointments today', value: activeToday, sub: `${aiBookedToday} booked by AI` },
     { label: 'Checked in', value: countStatus('checked_in'), sub: 'waiting or with the doctor' },
     { label: 'Seen', value: seenToday, sub: activeToday ? `${Math.round((seenToday / activeToday) * 100)}% of today` : '—' },
     { label: 'Cancelled · no-show', value: countStatus('cancelled', 'no_show'), sub: `${countStatus('cancelled')} cancelled · ${countStatus('no_show')} no-show` },
-    { label: 'Follow-ups due', value: followupsDueToday, sub: 'today or overdue' },
+    { label: 'Feedback calls due', value: feedbackDue, sub: 'today or overdue' },
   ]
 
   return (
@@ -465,7 +429,6 @@ export default function FrontDesk({ userName, callsPath, callDetailPath }: {
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-2">
                           <span className={`rounded border px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${chip.className}`}>{chip.label}</span>
-                          {t.demo && <span className="rounded border border-dashed border-slate-300 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-slate-400">Demo</span>}
                           {t.bucket === 'overdue' && <span className="text-xs font-medium text-rose-600">Overdue</span>}
                         </div>
                         <p className="mt-1 truncate text-sm font-semibold text-slate-900">{t.title}</p>
@@ -523,27 +486,6 @@ export default function FrontDesk({ userName, callsPath, callDetailPath }: {
             </div>
           </Panel>
 
-          <Panel title="Calls per day">
-            <div className="h-[110px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={perDay} margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
-                  <XAxis dataKey="date" tickLine={false} axisLine={false} tick={{ fontSize: 10, fill: '#94a3b8' }}
-                    tickFormatter={(v: string) => format(new Date(`${v}T00:00:00`), 'EEEEE')} />
-                  <Tooltip cursor={{ fill: '#f1f5f9' }} contentStyle={{ borderRadius: 10, fontSize: 12 }}
-                    labelFormatter={(v) => format(new Date(`${String(v)}T00:00:00`), 'EEE d MMM')} />
-                  <Bar dataKey="calls" name="Calls" fill="#030D39" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </Panel>
-
-          <Panel title="What patients called about">
-            <BreakdownBar data={outcomeData} emptyLabel="No calls this week" compact />
-          </Panel>
-
-          <Panel title="Today's appointments" action={<span className="text-xs text-slate-500">{aiBookedToday} booked by AI</span>}>
-            <BreakdownBar data={todayByStatus} emptyLabel="No appointments today" compact />
-          </Panel>
         </aside>
       </div>
 

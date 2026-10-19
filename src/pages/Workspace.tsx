@@ -20,6 +20,7 @@ import Reports from './Reports'
 import Appointments from './Appointments'
 import Doctors from './Doctors'
 import FrontDesk from './FrontDesk'
+import Visits from './Visits'
 import { Views } from 'react-big-calendar'
 import TeamSettings from './TeamSettings'
 import ProfileSettings from './ProfileSettings'
@@ -442,61 +443,8 @@ function AdminConsole({ user, clinics, hasMultiRole, currentView, onSwitchView, 
 }
 
 function ReceptionDesk({ user, clinics, hasMultiRole, currentView, onSwitchView, reloadUser }: { user: MeDto; clinics?: any[]; hasMultiRole?: boolean; currentView?: string; onSwitchView?: (v: string) => void; reloadUser?: () => Promise<void> }) {
-  const [patients, setPatients] = useState<PatientDto[]>([])
-  const [doctors, setDoctors] = useState<DoctorDto[]>([])
-  const [followups, setFollowups] = useState<FollowUpDto[]>([])
-  const [followupDraft, setFollowupDraft] = useState({ patient: '', doctor: '', scheduled_for: '', method: 'phone', notes: '' })
-  const { refreshTick, addToast } = useUIStore()
 
-  // What the Follow-ups page needs; the other pages load their own data.
-  const load = async () => {
-    try {
-      const t = Date.now()
-      const [patientsRes, doctorsRes, followupsRes] = await Promise.all([
-        api.get('/patients/', { params: { page_size: 50, _t: t } }),
-        api.get('/doctors/', { params: { page_size: 50, _t: t } }),
-        api.get('/followups/followups/', { params: { page_size: 50, _t: t } }),
-      ])
-      setPatients(unwrapList<PatientDto>(patientsRes.data))
-      setDoctors(unwrapList<DoctorDto>(doctorsRes.data))
-      setFollowups(unwrapList<FollowUpDto>(followupsRes.data))
-    } catch (err) {
-      console.error('ReceptionDesk load() failed', err)
-      addToast('Could not load reception data.', 'error')
-    }
-  }
-
-  useEffect(() => {
-    void load()
-  }, [refreshTick])
-
-  const patientOptions = useMemo(() => (patients || []).map((patient) => ({ value: String(patient.id), label: patient.full_name })), [patients])
-  const doctorOptions = useMemo(() => (doctors || []).map((doctor) => ({ value: String(doctor.id), label: `Dr. ${doctor.full_name}` })), [doctors])
-
-  const now = new Date()
-  now.setMinutes(now.getMinutes() - now.getTimezoneOffset())
-  const minDateTime = now.toISOString().slice(0, 16)
-
-  const createFollowUp = async (event: FormEvent) => {
-    event.preventDefault()
-    try {
-      await api.post('/followups/followups/', {
-        patient: Number(followupDraft.patient),
-        doctor: Number(followupDraft.doctor),
-        scheduled_for: followupDraft.scheduled_for,
-        method: followupDraft.method,
-        notes: followupDraft.notes,
-      })
-      addToast('Follow-up scheduled.', 'success')
-      await load()
-    } catch (error: any) {
-      if (error.response?.data) {
-        addToast(`Follow-up failed: ${JSON.stringify(error.response.data)}`, 'error')
-      } else {
-        addToast('Could not create the follow-up.', 'error')
-      }
-    }
-  }
+  // The pages load their own data; nothing is shared at this level any more.
 
   return (
     <WorkspaceShell
@@ -507,7 +455,7 @@ function ReceptionDesk({ user, clinics, hasMultiRole, currentView, onSwitchView,
         { section: 'Home', label: 'Dashboard', href: '/app/dashboard', icon: <LayoutDashboard className="h-[18px] w-[18px]" /> },
         { section: 'Operations', label: 'Calendar', href: '/app/calendar', icon: <CalendarDays className="h-[18px] w-[18px]" /> },
         { section: 'Operations', label: 'Appointments', href: '/app/appointments', icon: <ListTodo className="h-[18px] w-[18px]" /> },
-        { section: 'Operations', label: 'Follow-ups', href: '/app/followups', icon: <FileBarChart className="h-[18px] w-[18px]" /> },
+        { section: 'Operations', label: 'Visits', href: '/app/visits', icon: <FileBarChart className="h-[18px] w-[18px]" /> },
         { section: 'Patients', label: 'Patient directory', href: '/app/patients', icon: <ClipboardList className="h-[18px] w-[18px]" /> },
         { section: 'Insights', label: 'Call logs', href: '/app/calls', icon: <PhoneCall className="h-[18px] w-[18px]" /> },
       ]}
@@ -534,80 +482,8 @@ function ReceptionDesk({ user, clinics, hasMultiRole, currentView, onSwitchView,
         {/* The old booking page: bookings are now made on the Calendar and listed under Appointments. */}
         <Route path="booking" element={<Navigate to="/app/appointments" replace />} />
 
-        <Route path="followups" element={
-          <div className="grid gap-6 xl:grid-cols-[1.5fr_1fr]">
-            <div className="space-y-6">
-              <Card className="space-y-4 p-5" id="followups-list">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-lg font-semibold text-slate-950">Follow-ups Log</h3>
-                  <Button variant="secondary" size="sm" onClick={() => void load()}>Refresh</Button>
-                </div>
-                <div className="space-y-3">
-                  {followups.length === 0 ? (
-                    <p className="text-sm text-slate-500">No follow-ups found.</p>
-                  ) : (
-                    followups.map(f => (
-                      <div key={f.id} className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 rounded-xl border border-slate-200 p-4 bg-slate-50">
-                        <div className="flex-1 space-y-1.5">
-                          <div className="flex items-center gap-2">
-                            <p className="font-bold text-slate-900">{f.patient_name || `Patient #${f.patient}`}</p>
-                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-                              f.status === 'completed' ? 'bg-emerald-100 text-emerald-700' :
-                              f.status === 'pending' ? 'bg-amber-100 text-amber-700' :
-                              f.status === 'failed' ? 'bg-rose-100 text-rose-700' :
-                              'bg-slate-200 text-slate-700'
-                            }`}>
-                              {f.status}
-                            </span>
-                          </div>
-                          <p className="text-sm text-slate-600">Dr. {f.doctor_name || f.doctor}</p>
-                          {f.notes && <p className="text-sm text-slate-500 italic mt-1 bg-white p-2 rounded-lg border border-slate-100">Note: {f.notes}</p>}
-                          {f.outcome && <p className="text-sm font-medium text-emerald-700 bg-emerald-50 p-2 rounded-lg border border-emerald-100 mt-1">Outcome: {f.outcome}</p>}
-                        </div>
-                        <div className="text-left sm:text-right shrink-0">
-                          <p className="text-sm font-bold text-slate-900">
-                            {new Date(f.scheduled_for).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}
-                          </p>
-                          <span className="inline-block px-2 py-1 bg-white border border-slate-200 rounded-md text-xs font-semibold uppercase tracking-wider text-slate-600 mt-1">
-                            {f.method}
-                          </span>
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </Card>
-            </div>
-
-            <div className="space-y-6">
-              <Card className="space-y-4 p-5" id="followups-create">
-                <h3 className="text-lg font-semibold text-slate-950">Follow-ups and communication</h3>
-                <form className="space-y-3" onSubmit={createFollowUp}>
-                  <select className="w-full rounded-xl border border-slate-300 px-3 py-2" value={followupDraft.patient} onChange={(event) => setFollowupDraft((current) => ({ ...current, patient: event.target.value }))} required>
-                    <option value="" disabled>Select a patient</option>
-                    {patientOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-                  </select>
-                  <select className="w-full rounded-xl border border-slate-300 px-3 py-2" value={followupDraft.doctor} onChange={(event) => setFollowupDraft((current) => ({ ...current, doctor: event.target.value }))} required>
-                    <option value="" disabled>Select a doctor</option>
-                    {doctorOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-                  </select>
-                  <label className="block">
-                    <span className="text-sm text-slate-600 font-medium mb-1 block">Scheduled For</span>
-                    <DateTimePickerAmPm min={minDateTime} value={followupDraft.scheduled_for} onChange={(val) => setFollowupDraft((current) => ({ ...current, scheduled_for: val }))} required />
-                  </label>
-                  <select className="w-full rounded-xl border border-slate-300 px-3 py-2" value={followupDraft.method} onChange={(event) => setFollowupDraft((current) => ({ ...current, method: event.target.value }))}>
-                    <option value="phone">Call</option>
-                    <option value="whatsapp">WhatsApp</option>
-                    <option value="sms">SMS</option>
-                    <option value="email">Email</option>
-                  </select>
-                  <textarea className="min-h-24 w-full rounded-xl border border-slate-300 px-3 py-2" value={followupDraft.notes} onChange={(event) => setFollowupDraft((current) => ({ ...current, notes: event.target.value }))} placeholder="Communication notes" />
-                  <Button variant="default" type="submit" className="w-full justify-center" disabled={!followupDraft.patient || !followupDraft.doctor}>Create follow-up</Button>
-                </form>
-              </Card>
-            </div>
-          </div>
-        } />
+        <Route path="visits" element={<Visits />} />
+        <Route path="followups" element={<Navigate to="/app/visits" replace />} />
 
         <Route path="profile" element={
           <ProfileSettings user={user} reloadUser={reloadUser} />

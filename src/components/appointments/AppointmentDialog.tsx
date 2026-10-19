@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { addMinutes, differenceInMinutes, format, isToday } from 'date-fns'
-import { CalendarClock, Pencil, UserCheck, UserX, XCircle } from 'lucide-react'
+import { CalendarClock, CircleCheck, Pencil, UserCheck, UserX, XCircle } from 'lucide-react'
 import { api } from '../../lib/api'
 import {
   apiErrorMessage, fromDateTimeInputs, isOpen, sourceMeta, statusMeta, toDateTimeInputs, type Appointment,
@@ -168,6 +168,16 @@ export function AppointmentDialog({ appointment, onClose, onChanged, readOnly = 
                     onClick={() => void run(() => api.post(`/appointments/${appointment.id}/check_in/`), 'Checked in. The patient is in the queue.')}
                   >
                     <UserCheck /> Check in
+                  </Button>
+                )}
+                {(appointment.status === 'checked_in' || (appointment.status === 'scheduled' && isToday(starts))) && (
+                  <Button
+                    variant={appointment.status === 'checked_in' ? 'default' : 'outline'}
+                    size="sm"
+                    disabled={busy}
+                    onClick={() => void run(() => api.post(`/appointments/${appointment.id}/complete/`), 'Visit completed. The feedback call is planned for tomorrow.')}
+                  >
+                    <CircleCheck /> Visit completed
                   </Button>
                 )}
                 {editable && (

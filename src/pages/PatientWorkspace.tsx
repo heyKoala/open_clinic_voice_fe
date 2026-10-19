@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { PatientProfileHeader } from '../components/patient-profile/PatientProfileHeader'
 import { PatientBasicInfo } from '../components/patient-profile/PatientBasicInfo'
 import { PatientAppointmentTimeline } from '../components/patient-profile/PatientAppointmentTimeline'
+import { PatientFollowUps } from '../components/patient-profile/PatientFollowUps'
 import { PatientCallHistory } from '../components/patient-profile/PatientCallHistory'
 import { PatientFormDialog } from '../components/patient-profile/PatientFormDialog'
 
@@ -396,6 +397,7 @@ export default function PatientWorkspace({ canEdit = true, callDetailPath }: { c
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <PatientBasicInfo patient={patient} />
               <PatientAppointmentTimeline appointments={appointments} patientId={patient.id} patientName={patient.full_name} canEdit={canEdit} onRefresh={fetchDetails} />
+              <PatientFollowUps patientId={patient.id} />
             </div>
             <PatientCallHistory patientId={patient.id} phone={patient.phone} detailPath={callDetailPath} />
           </div>
