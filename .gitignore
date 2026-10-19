@@ -32,3 +32,23 @@ lerna-debug.log*
 *.sln
 *.sw?
 .claude/
+
+# Test and tool output
+coverage/
+.nyc_output/
+.eslintcache
+.vite/
+*.tgz
+
+# Deployment tool state
+.vercel/
+.netlify/
+
+# OS files
+Thumbs.db
+desktop.ini
+
+# Certificates and keys
+*.pem
+*.key
+*.p12
