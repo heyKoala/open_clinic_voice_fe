@@ -78,6 +78,22 @@ No environment file is needed for development. Two optional variables, documente
 Every `VITE_` value ends up in the public JavaScript, so never put keys or secrets here; they belong in the
 backend's `.env`.
 
+### From AWS Secrets Manager (deployed builds)
+
+Same pattern as the backend. Before every `npm run build`, `scripts/load-aws-secrets.mjs` runs:
+
+- `USE_AWS_SECRETS` off (the default): nothing changes; the build uses the normal environment.
+- On: it reads the JSON secret `AWS_SECRETS_NAME` in `AWS_REGION_NAME` (default `ap-south-1`) with the build
+  machine's AWS role and writes its `VITE_*` keys to `.env.production.local` (git-ignored) for Vite. If the
+  secret can't be read, the build fails.
+
+```
+USE_AWS_SECRETS=True AWS_SECRETS_NAME=<frontend secret> npm run build
+```
+
+The secret only needs `{"VITE_API_BASE_URL": "https://clinic-api.koala.cx/api/v1"}`. Keys without the `VITE_`
+prefix are ignored, and nothing secret may ever use a `VITE_` name, since those values are public.
+
 ## Notes for developers
 
 - API calls go through `src/lib/api.ts` (cookie auth, CSRF header, and the active hospital in
