@@ -1,45 +1,89 @@
-# ManageOPD Frontend (`manageopd-fe`)
+# Gunasheela front desk (simplified ManageOPD frontend)
 
-This directory contains the user interface for the ManageOPD application. It is a single-page application (SPA) built to deliver a premium, modern, and highly responsive experience.
+The web app for Gunasheela Surgical & Maternity Hospital's front desk and admin. Patients book by phone
+through the AI receptionist (Kavya); this app is where staff see those bookings, move each visit along,
+and follow the AI's reminder and feedback calls.
 
-## Technology Stack
-- **Framework**: React 18
-- **Build Tool**: Vite
-- **Language**: TypeScript
-- **Styling**: TailwindCSS (v3) + PostCSS
-- **Routing**: `react-router-dom`
-- **State Management**: Zustand (for lightweight global state, e.g., UI selections)
-- **Icons**: `lucide-react`
-- **HTTP Client**: Axios (configured in `src/lib/api.ts` with interceptors for auth cookies)
+It talks to the ManageOPD backend (`open_clinic_voice_be`) and works alongside the original, full
+ManageOPD frontend (`open_clinic_voice_fe`); both use the same backend and database.
 
-## Architecture & Layouts
+## The flow it supports
 
-The application essentially serves two primary flows separated by top-level routes:
-1. **Public/Auth Shell (`src/App.tsx`)**: Contains the Landing Page, Login, Signup, Reset Password, and Email Verification logic.
-2. **Workspace Shell (`src/pages/Workspace.tsx`)**: The core application. A unified shell that dynamically mounts distinct views based on the authenticated user's `role`.
+1. A patient calls the hospital number. The AI answers, books, cancels or reschedules, and answers questions
+   from the knowledge base. The call appears in **Call logs** with transcript, recording, AI summary,
+   caller mood and an outcome tag (booked, cancelled, rescheduled, information only, needs callback).
+2. The booking appears in **Appointments** and the **Calendar**. The day before, the AI places a **reminder call**.
+3. On the day, the desk checks the patient in and marks the visit completed on **Visits** (recording any
+   follow-up the doctor asked for).
+4. The next day the AI places a **feedback call**; a good rating gets the Google review link, a poor one becomes
+   a callback task on the **Dashboard**.
 
-### Role-Based Rendering in Workspace
-The `WorkspaceRouter` inside `Workspace.tsx` reads the `user.role` from the API `/auth/me/` and returns one of three components:
-- `<ReceptionDesk />`: Front desk operations (Queue, Patients, Booking).
-- `<DoctorWorkspace />`: Clinical operations (Queue, Symptom Summaries, Patient Charts).
-- `<AdminConsole />`: Management operations (Analytics, Reporting, Team Management).
+## Who sees what
 
-## Component Design
-The `src/components/ui` folder contains reusable atoms that power the unified aesthetic:
-- **`Button.tsx`**: Dynamic variants (primary, secondary, danger) with loading states.
-- **`Card.tsx`**: A fundamental layout wrapper with soft shadows and borders for the "glassmorphism" feel.
-- **`PasswordInput.tsx`**: Includes live inline validation checking for strong passwords.
-- **`PhoneInput.tsx`**: Custom country code selector with international standard support.
-- **`AmPmTimePicker.tsx`**: Translates user-friendly 12-hour AM/PM interactions into strict 24-hour HH:mm strings for backend compliance.
-- **`DateTimePickerAmPm.tsx`**: An intuitive replacement for native `datetime-local` inputs.
+| Role | Lands on | Pages |
+| --- | --- | --- |
+| Admin | Admin console | Dashboard, Calendar, Appointments, Doctors, Patients, Reports, AI Agent, Integrations, Settings. Can switch to the reception desk from the account menu. |
+| Receptionist | Reception desk | Dashboard, Calendar, Appointments, Visits, Patient directory, Call logs |
+| Doctor | Doctor workspace | Own queue and patients (separate login; not the focus of this app) |
 
-## State & API
-- API calls are structured inside local component functions using `async/await`.
-- We utilize `Promise.allSettled()` for robust dashboard loading (e.g., in `DoctorWorkspace`) so that if one API endpoint fails, the rest of the widgets continue to load successfully.
-- Cross-component state (like the currently selected patient in the drawer) is managed via `useUIStore` inside `src/store/uistore.ts`.
+Main pages, under `src/pages` unless noted:
 
-## Styling Conventions
-The UI is strictly designed with Vanilla TailwindCSS utility classes. We prioritize:
-- Slate and Emerald color palettes for a clinical yet modern aesthetic.
-- Subtle `transition-all` animations on interactive elements.
-- Full responsiveness, utilizing `grid` and `md:grid-cols-*` to snap widgets smoothly across mobile and desktop.
+- `FrontDesk.tsx`: the dashboard. Today's numbers, the task list (check-ins, visits, callbacks, reschedules,
+  reminder and feedback calls) and bookings by channel.
+- `Visits.tsx`: today's visits with Check in, Visit completed and No-show, plus pending follow-ups.
+- `Appointments.tsx` and `src/components/CalendarView.tsx`: every booking, with the patient journey.
+- `PatientWorkspace.tsx`: patient directory and record, including call history and follow-ups.
+- `Reports.tsx`, `CallDetail.tsx`: call analytics, call logs, transcripts and recordings.
+- `AIAgent.tsx`: agent settings (greeting, instructions, models, call audio), call scripts, knowledge base,
+  phone number and a browser test call.
+- `Integrations.tsx`: WATI (WhatsApp), PMS and Razorpay connections.
+- `ClinicSettings.tsx`: hospital details, holidays, reminder and feedback call settings, team, billing.
+- `Workspace.tsx`: the shell and routes for each role.
+
+## Stack
+
+React 19, TypeScript, Vite, Tailwind CSS v4, React Router, Zustand, Axios, Recharts, date-fns, and
+LiveKit for the in-browser test call.
+
+## Running it
+
+Needs Node 20 or newer and the backend running on port 8001.
+
+```
+npm install
+npm run dev
+```
+
+Open the address Vite prints. The dev server forwards `/api`, `/media` and `/ws` to `http://localhost:8001`,
+so the browser only ever talks to the dev server, and the app also works when shared through a tunnel.
+
+Other scripts:
+
+```
+npm run build     # type-check and build into dist/
+npm run preview   # serve the build locally
+npm run lint      # oxlint
+```
+
+## Configuration
+
+No environment file is needed for development. Two optional variables, documented in `.env.example`
+(copy it to `.env.local`):
+
+- `VITE_API_BASE_URL`: the backend's API address in production when it is on another domain, e.g.
+  `https://api.example.com/api/v1`. Empty means `/api/v1` on the app's own address.
+- `VITE_PUBLIC_BACKEND_URL`: only for the Test call page, and not needed when the backend has
+  `PUBLIC_BASE_URL` set.
+
+Every `VITE_` value ends up in the public JavaScript, so never put keys or secrets here; they belong in the
+backend's `.env`.
+
+## Notes for developers
+
+- API calls go through `src/lib/api.ts` (cookie auth, CSRF header, and the active hospital in
+  `X-Active-Clinic-Id`). Page-level data loading uses `Promise.allSettled` so one failing endpoint does not
+  blank the page.
+- Shared types and helpers live in `src/lib` (`appointments.ts`, `analytics.ts`, `patientCalls.ts`,
+  `knowledge.ts`, `integrations.ts`, `phone.ts`).
+- The hospital currently has one centre; the centre switcher appears only when there is more than one.
+- Run `npx tsc -b` before committing; the build fails on type errors.
