@@ -3,8 +3,9 @@ import { useUIStore } from '../store/uistore'
 import { playnotificationsound } from '../components/sounds/soundsmanager'
 import { api } from '../lib/api'
 
-const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-const WS_URL = `${wsProtocol}//${window.location.host}/ws/events/`
+const apiBase = new URL(import.meta.env.VITE_API_BASE_URL ?? '/', window.location.origin)
+const wsProtocol = apiBase.protocol === 'https:' ? 'wss:' : 'ws:'
+const WS_URL = `${wsProtocol}//${apiBase.host}/ws/events/`
 type EventPayload = {
   type: string
   data: any
