@@ -91,7 +91,7 @@ Same pattern as the backend. Before every `npm run build`, `scripts/load-aws-sec
 USE_AWS_SECRETS=True AWS_SECRETS_NAME=<frontend secret> npm run build
 ```
 
-The secret only needs `{"VITE_API_BASE_URL": "https://clinic-api.koala.cx/api/v1"}`. Keys without the `VITE_`
+The secret only needs `{"VITE_API_BASE_URL": "https://clinic-api.heykoala.ai/api/v1"}`. Keys without the `VITE_`
 prefix are ignored, and nothing secret may ever use a `VITE_` name, since those values are public.
 
 ## Notes for developers
