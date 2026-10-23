@@ -33,8 +33,8 @@ type AgentSettings = CallAudio & {
   tts: Stage
   realtime: Stage
   defaults: { first_message: string; system_prompt: string }
-  /** Longest greeting/instructions that save, and the length past which long instructions are flagged. */
-  limits?: { first_message: number; system_prompt: number; system_prompt_long: number }
+  /** Longest instructions that save, and the length past which they are flagged as long. */
+  limits?: { system_prompt: number; system_prompt_long: number }
   call_defaults: CallAudio
   listening_options: { id: Listening; label: string }[]
   /** Whether changes to the inbound flags can be pushed to the hospital number. */
@@ -537,7 +537,7 @@ export default function AgentSettingsPage() {
             value={settings.first_message}
             onChange={(e) => update({ first_message: e.target.value })}
           />
-          <CharCount length={settings.first_message.length} max={settings.limits?.first_message} />
+          <CharCount length={settings.first_message.length} />
           {errors.first_message && <p className="mt-1 text-xs font-medium text-red-600">{errors.first_message}</p>}
         </Field>
 
