@@ -33,6 +33,8 @@ type AgentSettings = CallAudio & {
   tts: Stage
   realtime: Stage
   defaults: { first_message: string; system_prompt: string }
+  /** Longest greeting/instructions that save, and the length past which long instructions are flagged. */
+  limits?: { first_message: number; system_prompt: number; system_prompt_long: number }
   call_defaults: CallAudio
   listening_options: { id: Listening; label: string }[]
   /** Whether changes to the inbound flags can be pushed to the hospital number. */
@@ -42,6 +44,21 @@ type AgentSettings = CallAudio & {
   owner_clinic: { id: number; name: string }
   catalog_available: boolean
   preview_providers: string[]
+}
+
+/** "14,339 / 100,000 characters" under a text box; amber with a note past ``long``, red past ``max``. */
+function CharCount({ length, max, long, longNote }: { length: number; max?: number; long?: number; longNote?: string }) {
+  const over = max !== undefined && length > max
+  const isLong = !over && long !== undefined && length > long
+  const colour = over ? 'text-red-600' : isLong ? 'text-amber-700' : 'text-slate-500'
+  return (
+    <p className={`mt-1 text-xs ${colour}`}>
+      {length.toLocaleString('en-IN')}
+      {max !== undefined && ` / ${max.toLocaleString('en-IN')}`} characters
+      {over && ' (too long to save)'}
+      {isLong && longNote && ` · ${longNote}`}
+    </p>
+  )
 }
 
 const CALL_AUDIO_KEYS: (keyof CallAudio)[] = [
@@ -520,6 +537,7 @@ export default function AgentSettingsPage() {
             value={settings.first_message}
             onChange={(e) => update({ first_message: e.target.value })}
           />
+          <CharCount length={settings.first_message.length} max={settings.limits?.first_message} />
           {errors.first_message && <p className="mt-1 text-xs font-medium text-red-600">{errors.first_message}</p>}
         </Field>
 
@@ -528,6 +546,12 @@ export default function AgentSettingsPage() {
             className={`${inputClass} min-h-[260px] leading-relaxed`}
             value={settings.system_prompt}
             onChange={(e) => update({ system_prompt: e.target.value })}
+          />
+          <CharCount
+            length={settings.system_prompt.length}
+            max={settings.limits?.system_prompt}
+            long={settings.limits?.system_prompt_long}
+            longNote="Long instructions can make the receptionist slower to reply. Move hospital facts to the knowledge base where you can."
           />
           {errors.system_prompt && <p className="mt-1 text-xs font-medium text-red-600">{errors.system_prompt}</p>}
         </Field>
