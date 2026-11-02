@@ -6,7 +6,7 @@ import { api } from '../lib/api'
 import { SentimentBadge, TestCallBadge } from '../components/analytics/CallLogsTable'
 import { formatPhone } from '../lib/phone'
 import {
-  formatDuration, getCallLog, languageLabel, outcomeMeta, outcomeText, type CallLog, type Paginated,
+  callerSilent, formatDuration, getCallLog, languageLabel, outcomeMeta, outcomeText, type CallLog, type Paginated,
 } from '../lib/analytics'
 
 /** Transcript lines come as "AI: …" / "Patient: …" (see the backend's format_transcript). */
@@ -73,6 +73,9 @@ export default function CallDetail({ backTo }: { backTo: string }) {
   const meta = outcomeMeta(call.outcome)
   const turns = parseTranscript(call.transcript || '')
   const DirectionIcon = call.direction === 'inbound' ? PhoneIncoming : PhoneOutgoing
+  const silent = callerSilent(call)
+  const summary = silent ? '' : call.summary
+  const sentiment = silent ? '' : call.sentiment
 
   return (
     <div className="max-w-5xl space-y-6 pb-6">
@@ -96,14 +99,14 @@ export default function CallDetail({ backTo }: { backTo: string }) {
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            {call.sentiment && <SentimentBadge value={call.sentiment} />}
+            {sentiment && <SentimentBadge value={sentiment} />}
             {outcomeText(call.outcome) && <span className={`rounded-md border px-2.5 py-1 text-xs font-semibold ${meta.badge}`}>{outcomeText(call.outcome)}</span>}
           </div>
         </div>
 
         <div className="mt-6 grid grid-cols-2 gap-5 border-t border-slate-100 pt-5 md:grid-cols-4">
           <Fact label="Direction"><span className="capitalize">{call.direction}</span></Fact>
-          <Fact label="Duration">{formatDuration(call.duration_seconds)}</Fact>
+          <Fact label="Duration">{call.duration_seconds ? formatDuration(call.duration_seconds) : '—'}</Fact>
           <Fact label="Language">{languageLabel(call.language)}</Fact>
           <Fact label="Doctor">{call.doctor_name ? `Dr. ${call.doctor_name}` : '—'}</Fact>
         </div>
@@ -120,18 +123,23 @@ export default function CallDetail({ backTo }: { backTo: string }) {
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_300px]">
         <div className="space-y-6">
-          {call.summary && (
+          {summary && (
             <section className="rounded-2xl border border-cyan-100 bg-cyan-50/40 p-5">
               <h2 className="mb-2 flex items-center gap-2 text-sm font-semibold text-cyan-800">
                 <Sparkles className="h-4 w-4" /> AI summary
-                {call.sentiment && (
+                {sentiment && (
                   <span className="ml-auto flex items-center gap-2 text-xs font-medium text-slate-500">
-                    Caller sentiment <SentimentBadge value={call.sentiment} />
+                    Caller sentiment <SentimentBadge value={sentiment} />
                   </span>
                 )}
               </h2>
-              <p className="text-sm leading-relaxed text-slate-700">{call.summary}</p>
+              <p className="text-sm leading-relaxed text-slate-700">{summary}</p>
             </section>
+          )}
+          {silent && (
+            <p className="rounded-2xl border border-slate-200 bg-white px-5 py-4 text-sm text-slate-500">
+              The caller didn't speak on this call, so there is no AI summary.
+            </p>
           )}
 
           <section className="rounded-2xl border border-slate-200 bg-white">

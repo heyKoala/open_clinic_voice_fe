@@ -4,7 +4,7 @@ import { ChevronLeft, ChevronRight, Download, PhoneIncoming, PhoneOutgoing, Sear
 import { format } from 'date-fns'
 import { formatPhone } from '../../lib/phone'
 import {
-  OUTCOMES, SENTIMENTS, formatDuration, getCallLogs, languageLabel, outcomeMeta, outcomeText, sentimentMeta,
+  OUTCOMES, SENTIMENTS, callerSilent, formatDuration, getCallLogs, languageLabel, outcomeMeta, outcomeText, sentimentMeta,
   type CallKind, type CallLog, type CallLogQuery, type Paginated, type ReportFilters,
 } from '../../lib/analytics'
 
@@ -237,15 +237,15 @@ export function CallLogsTable({ filters, detailPath, outcome, onOutcomeChange, s
                       </span>
                     </td>
                     <td className="px-4 py-3 text-slate-600">{languageLabel(log.language)}</td>
-                    <td className="px-4 py-3 text-right font-mono text-xs text-slate-700">{formatDuration(log.duration_seconds)}</td>
+                    <td className="px-4 py-3 text-right font-mono text-xs text-slate-700">{log.duration_seconds ? formatDuration(log.duration_seconds) : '—'}</td>
                     <td className="px-4 py-3">
                       {outcomeText(log.outcome)
                         ? <span className={`inline-block rounded-md border px-2 py-0.5 text-xs font-medium ${meta.badge}`}>{outcomeText(log.outcome)}</span>
                         : <span className="text-slate-400">—</span>}
                     </td>
-                    <td className="px-4 py-3"><SentimentBadge value={log.sentiment} /></td>
+                    <td className="px-4 py-3"><SentimentBadge value={callerSilent(log) ? '' : log.sentiment} /></td>
                     <td className="px-4 py-3 text-slate-600">{log.doctor_name ? `Dr. ${log.doctor_name}` : '—'}</td>
-                    <td className="max-w-[320px] truncate px-4 py-3 text-slate-500">{log.summary || '—'}</td>
+                    <td className="max-w-[320px] truncate px-4 py-3 text-slate-500">{(!callerSilent(log) && log.summary) || '—'}</td>
                   </tr>
                 )
               })

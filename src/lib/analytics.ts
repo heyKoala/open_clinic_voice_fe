@@ -77,6 +77,13 @@ export type CallLog = {
   doctor_name?: string | null
 }
 
+/** The caller never spoke: the transcript has only the AI's lines (e.g. its greeting). A summary or sentiment on
+ *  such a call was made up from the greeting, so it isn't shown. */
+export function callerSilent(log: Pick<CallLog, 'transcript'>) {
+  const lines = (log.transcript || '').split('\n').filter((line) => line.trim())
+  return lines.length > 0 && !lines.some((line) => /^\s*(Patient|User|Caller)\s*:/i.test(line))
+}
+
 export type Paginated<T> = { count: number; next: string | null; previous: string | null; results: T[] }
 
 // ─── Filters ─────────────────────────────────────────────────────────────────

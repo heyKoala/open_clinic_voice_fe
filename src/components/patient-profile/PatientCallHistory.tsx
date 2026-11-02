@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { format } from 'date-fns'
 import { PhoneIncoming, PhoneOutgoing } from 'lucide-react'
 import { api } from '../../lib/api'
-import { formatDuration, outcomeText, type CallLog, type Paginated } from '../../lib/analytics'
+import { callerSilent, formatDuration, outcomeText, type CallLog, type Paginated } from '../../lib/analytics'
 import { SentimentBadge, TestCallBadge } from '../analytics/CallLogsTable'
 
 /**
@@ -78,10 +78,10 @@ export function PatientCallHistory({ patientId, phone, detailPath }: {
                     </td>
                     <td className="px-4 py-3">
                       <p className="text-slate-900">{outcomeText(c.outcome) || <span className="text-slate-400">—</span>}</p>
-                      {c.summary && <p className="max-w-md truncate text-xs text-slate-500" title={c.summary}>{c.summary}</p>}
+                      {c.summary && !callerSilent(c) && <p className="max-w-md truncate text-xs text-slate-500" title={c.summary}>{c.summary}</p>}
                     </td>
                     <td className="px-4 py-3 text-slate-700">{c.duration_seconds ? formatDuration(c.duration_seconds) : '—'}</td>
-                    <td className="px-4 py-3"><SentimentBadge value={c.sentiment} /></td>
+                    <td className="px-4 py-3"><SentimentBadge value={callerSilent(c) ? '' : c.sentiment} /></td>
                     {detailPath && (
                       <td className="px-4 py-3 text-right">
                         <Link to={`${detailPath}/${c.id}`} className="text-sm font-medium text-cyan-700 hover:underline">Open</Link>
