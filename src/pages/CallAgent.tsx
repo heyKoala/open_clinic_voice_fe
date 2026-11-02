@@ -4,7 +4,8 @@ import { Mic, MicOff, Phone, PhoneOff } from "lucide-react";
 import { api } from "../lib/api";
 
 export default function CallAgent() {
-  const url = "wss://vx.heykoala.ai";
+  // The voice provider's LiveKit server; its web-call tokens are only valid there.
+  const url = import.meta.env.VITE_LIVEKIT_URL || "wss://eu-heykoala-c5eadreu.livekit.cloud";
   const [isConnected, setIsConnected] = useState(false);
   const [showBtn, setShowBtn] = useState(true);
   const [room, setRoom] = useState<Room | null>(null);
